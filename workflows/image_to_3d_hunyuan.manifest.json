@@ -1,0 +1,100 @@
+{
+  "name": "image_to_3d_hunyuan",
+  "title": "Image to 3D shape (Hunyuan3D 2 mini, native ComfyUI nodes)",
+  "kind": "image_to_3d",
+  "description": "Generates an untextured mesh (GLB) from a single concept image. Shape only - colors are projected from the concept image in Blender. Requires a recent ComfyUI with native Hunyuan3D v2 nodes.",
+  "requirements": [
+    "ComfyUI with native Hunyuan3D v2 nodes (ComfyUI 0.3.27 or newer)",
+    "Hunyuan3D-2mini shape model in models/checkpoints (role threed.shape_model)"
+  ],
+  "parameters": {
+    "image": {
+      "node": "2",
+      "input": "image",
+      "type": "image",
+      "description": "Concept image with plain/white background"
+    },
+    "seed": {
+      "node": "7",
+      "input": "seed",
+      "type": "int",
+      "min": 0,
+      "max": 4294967295
+    },
+    "steps": {
+      "node": "7",
+      "input": "steps",
+      "type": "int",
+      "default": 30,
+      "min": 5,
+      "max": 100
+    },
+    "cfg": {
+      "node": "7",
+      "input": "cfg",
+      "type": "float",
+      "default": 5.0,
+      "min": 1,
+      "max": 15
+    },
+    "octree_resolution": {
+      "node": "8",
+      "input": "octree_resolution",
+      "type": "int",
+      "default": 256,
+      "min": 64,
+      "max": 512
+    },
+    "num_chunks": {
+      "node": "8",
+      "input": "num_chunks",
+      "type": "int",
+      "default": 8000,
+      "min": 1000,
+      "max": 500000
+    },
+    "threshold": {
+      "node": "9",
+      "input": "threshold",
+      "type": "float",
+      "default": 0.6,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "latent_resolution": {
+      "node": "5",
+      "input": "resolution",
+      "type": "int",
+      "default": 3072,
+      "min": 1024,
+      "max": 8192
+    },
+    "filename_prefix": {
+      "node": "10",
+      "input": "filename_prefix",
+      "type": "string"
+    }
+  },
+  "models": {
+    "threed.shape_model": {
+      "node": "1",
+      "input": "ckpt_name"
+    }
+  },
+  "outputs": {
+    "mesh": {
+      "node": "10"
+    }
+  },
+  "profiles": {
+    "low": {
+      "octree_resolution": 192,
+      "num_chunks": 4000,
+      "steps": 25
+    },
+    "medium": {
+      "octree_resolution": 256,
+      "num_chunks": 6000
+    }
+  }
+}

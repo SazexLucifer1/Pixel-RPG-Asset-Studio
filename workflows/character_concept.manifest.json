@@ -1,0 +1,122 @@
+{
+  "name": "character_concept",
+  "title": "Character concept (SDXL + pixel-art LoRA)",
+  "kind": "image",
+  "description": "Text-to-image character concept, full body, front view, plain background. Used as master reference and as input for 3D generation.",
+  "requirements": [
+    "ComfyUI core nodes only (no custom nodes required)",
+    "An SDXL checkpoint (role image.checkpoint)",
+    "A pixel-art SDXL LoRA (role image.pixel_lora)"
+  ],
+  "parameters": {
+    "prompt": {
+      "node": "6",
+      "input": "text",
+      "type": "string",
+      "description": "Positive prompt"
+    },
+    "negative_prompt": {
+      "node": "7",
+      "input": "text",
+      "type": "string"
+    },
+    "seed": {
+      "node": "3",
+      "input": "seed",
+      "type": "int",
+      "min": 0,
+      "max": 4294967295
+    },
+    "steps": {
+      "node": "3",
+      "input": "steps",
+      "type": "int",
+      "default": 28,
+      "min": 1,
+      "max": 150
+    },
+    "cfg": {
+      "node": "3",
+      "input": "cfg",
+      "type": "float",
+      "default": 6.0,
+      "min": 1,
+      "max": 30
+    },
+    "sampler": {
+      "node": "3",
+      "input": "sampler_name",
+      "type": "string"
+    },
+    "scheduler": {
+      "node": "3",
+      "input": "scheduler",
+      "type": "string"
+    },
+    "width": {
+      "node": "5",
+      "input": "width",
+      "type": "int",
+      "default": 1024,
+      "min": 256,
+      "max": 2048
+    },
+    "height": {
+      "node": "5",
+      "input": "height",
+      "type": "int",
+      "default": 1024,
+      "min": 256,
+      "max": 2048
+    },
+    "batch_size": {
+      "node": "5",
+      "input": "batch_size",
+      "type": "int",
+      "default": 1,
+      "min": 1,
+      "max": 8
+    },
+    "lora_strength": {
+      "node": "10",
+      "input": [
+        "strength_model",
+        "strength_clip"
+      ],
+      "type": "float",
+      "default": 0.9,
+      "min": 0,
+      "max": 2
+    },
+    "filename_prefix": {
+      "node": "9",
+      "input": "filename_prefix",
+      "type": "string"
+    }
+  },
+  "models": {
+    "image.checkpoint": {
+      "node": "4",
+      "input": "ckpt_name"
+    },
+    "image.pixel_lora": {
+      "node": "10",
+      "input": "lora_name"
+    }
+  },
+  "outputs": {
+    "images": {
+      "node": "9"
+    }
+  },
+  "profiles": {
+    "low": {
+      "width": 768,
+      "height": 768,
+      "steps": 22
+    },
+    "medium": {
+      "steps": 24
+    }
+  }
+}

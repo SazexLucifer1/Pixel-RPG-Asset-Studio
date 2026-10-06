@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "note": "Catalog of models the bundled workflows are designed for. Models are NEVER downloaded automatically and are NOT part of this repository. Always read the license on the official page before use - licenses can change.",
+  "models": [
+    {
+      "id": "sdxl_base_1_0",
+      "name": "Stable Diffusion XL base 1.0",
+      "role": "image.checkpoint",
+      "folder": "checkpoints",
+      "filename": "sd_xl_base_1.0.safetensors",
+      "size_gb": 6.9,
+      "min_vram_gb": 6,
+      "download_page": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+      "license": "CreativeML Open RAIL++-M",
+      "license_url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
+      "notes": "Any SDXL-compatible checkpoint can be used instead (choose it in AI Models). Stylized SDXL fine-tunes often give better pixel art.",
+      "providers": ["comfyui"]
+    },
+    {
+      "id": "pixel_art_xl_lora",
+      "name": "Pixel Art XL (LoRA for SDXL)",
+      "role": "image.pixel_lora",
+      "folder": "loras",
+      "filename": "pixel-art-xl.safetensors",
+      "size_gb": 0.2,
+      "min_vram_gb": 0,
+      "download_page": "https://huggingface.co/nerijs/pixel-art-xl",
+      "license": "See model card (CreativeML Open RAIL-M family)",
+      "license_url": "https://huggingface.co/nerijs/pixel-art-xl",
+      "notes": "Dedicated pixel-art style LoRA. Any SDXL pixel-art LoRA can be configured instead. The app's deterministic pixel processing produces the final pixel grid either way.",
+      "providers": ["comfyui"]
+    },
+    {
+      "id": "hunyuan3d_2_mini",
+      "name": "Hunyuan3D-2mini (shape model)",
+      "role": "threed.shape_model",
+      "folder": "checkpoints",
+      "filename": "hunyuan3d-dit-v2-mini.safetensors",
+      "size_gb": 1.2,
+      "min_vram_gb": 6,
+      "download_page": "https://huggingface.co/tencent/Hunyuan3D-2mini",
+      "license": "Tencent Hunyuan 3D 2.0 Community License",
+      "license_url": "https://huggingface.co/tencent/Hunyuan3D-2mini/blob/main/LICENSE",
+      "license_warning": "This license does NOT grant rights in the European Union, the United Kingdom and South Korea, and has additional conditions. If it does not fit your situation, import 3D models you made yourself (or from another tool/model whose license fits) - the rest of the pipeline works the same.",
+      "notes": "Download 'hunyuan3d-dit-v2-mini/model.fp16.safetensors' and save it as models/checkpoints/hunyuan3d-dit-v2-mini.safetensors. Requires a ComfyUI version with native Hunyuan3D v2 nodes. Shape only (no texture) - colours are projected from the concept image in Blender.",
+      "providers": ["comfyui_hunyuan3d"]
+    }
+  ],
+  "tools": [
+    {"id": "comfyui", "name": "ComfyUI", "download_page": "https://github.com/comfyanonymous/ComfyUI/releases", "desktop_page": "https://www.comfy.org/download", "license": "GPL-3.0"},
+    {"id": "blender", "name": "Blender", "download_page": "https://www.blender.org/download/", "license": "GPL-2.0-or-later"}
+  ]
+}

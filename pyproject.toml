@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pixel-rpg-asset-studio"
+dynamic = ["version"]
+description = "Local-AI pixel-art asset production studio for Godot games"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.6,<7",
+    "Pillow>=10.0",
+    "numpy>=1.26",
+    "requests>=2.31",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-qt>=4.4", "pyinstaller>=6.6"]
+
+[project.scripts]
+pixel-rpg-studio = "pixel_rpg_studio.app:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "pixel_rpg_studio.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pixel_rpg_studio = ["blender/scripts/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "ui: tests that need a Qt application (run offscreen)",
+    "blender: tests that need a real Blender executable (skipped if not found)",
+]

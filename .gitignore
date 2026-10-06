@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build output (the build/ folder itself holds tracked build configuration)
+dist/
+build/_work/
+build/output/
+*.spec.bak
+
+# AI model weights - never commit these
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.gguf
+*.onnx
+/models/
+
+# Generated assets, user projects, local config
+user_projects/
+*.studio-project/
+/generated/
+/exports/
+/output/
+settings.local.json
+.env
+.env.*
+*.key
+secrets*
+
+# Large 3D / media binaries
+*.blend
+*.blend1
+*.glb
+*.fbx
+*.zip
+*.7z
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

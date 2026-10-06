@@ -1,0 +1,116 @@
+{
+  "name": "object_concept_reference",
+  "title": "Object concept from reference image (img2img)",
+  "kind": "image",
+  "description": "Uses an uploaded reference image as the starting point so proportions and colors carry over.",
+  "requirements": [
+    "ComfyUI core nodes only (no custom nodes required)",
+    "An SDXL checkpoint (role image.checkpoint)",
+    "A pixel-art SDXL LoRA (role image.pixel_lora)"
+  ],
+  "parameters": {
+    "prompt": {
+      "node": "6",
+      "input": "text",
+      "type": "string",
+      "description": "Positive prompt"
+    },
+    "negative_prompt": {
+      "node": "7",
+      "input": "text",
+      "type": "string"
+    },
+    "seed": {
+      "node": "3",
+      "input": "seed",
+      "type": "int",
+      "min": 0,
+      "max": 4294967295
+    },
+    "steps": {
+      "node": "3",
+      "input": "steps",
+      "type": "int",
+      "default": 28,
+      "min": 1,
+      "max": 150
+    },
+    "cfg": {
+      "node": "3",
+      "input": "cfg",
+      "type": "float",
+      "default": 6.0,
+      "min": 1,
+      "max": 30
+    },
+    "sampler": {
+      "node": "3",
+      "input": "sampler_name",
+      "type": "string"
+    },
+    "scheduler": {
+      "node": "3",
+      "input": "scheduler",
+      "type": "string"
+    },
+    "lora_strength": {
+      "node": "10",
+      "input": [
+        "strength_model",
+        "strength_clip"
+      ],
+      "type": "float",
+      "default": 0.9,
+      "min": 0,
+      "max": 2
+    },
+    "filename_prefix": {
+      "node": "9",
+      "input": "filename_prefix",
+      "type": "string"
+    },
+    "init_image": {
+      "node": "11",
+      "input": "image",
+      "type": "image",
+      "description": "Uploaded reference image"
+    },
+    "denoise": {
+      "node": "3",
+      "input": "denoise",
+      "type": "float",
+      "default": 0.6,
+      "min": 0.05,
+      "max": 1.0
+    },
+    "megapixels": {
+      "node": "13",
+      "input": "megapixels",
+      "type": "float",
+      "default": 1.0,
+      "min": 0.25,
+      "max": 2.0
+    }
+  },
+  "models": {
+    "image.checkpoint": {
+      "node": "4",
+      "input": "ckpt_name"
+    },
+    "image.pixel_lora": {
+      "node": "10",
+      "input": "lora_name"
+    }
+  },
+  "outputs": {
+    "images": {
+      "node": "9"
+    }
+  },
+  "profiles": {
+    "low": {
+      "megapixels": 0.6,
+      "steps": 22
+    }
+  }
+}
