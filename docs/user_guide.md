@@ -100,7 +100,9 @@ Set your Godot project folder once (*Projects → Godot project*, or on the firs
 - individual PNGs per view, `TileSet` `.tres` for tilesets, layer PNGs for backgrounds
 - `scripts/pixel_rpg_directional_sprite.gd`: attach it to an `AnimatedSprite2D` and call `play_action("walk")` and `face_vector(velocity)`
 
-Existing files are never overwritten without asking. For crisp pixels, set *Project Settings → Rendering → Textures → Default Texture Filter* to **Nearest** in Godot (the helper script also sets it per sprite).
+Existing files are never overwritten without asking.
+
+**Projects → Export All Accepted Assets to Godot** exports every accepted asset in one go. **Game-ready Export to Project Folder** writes the same files to `<project>/exports/godot/`, ready to copy into any Godot project. For crisp pixels, set *Project Settings → Rendering → Textures → Default Texture Filter* to **Nearest** in Godot (the helper script also sets it per sprite).
 
 ## Low VRAM
 

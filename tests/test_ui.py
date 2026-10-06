@@ -104,3 +104,22 @@ def test_setup_wizard_builds(qtbot, mock_settings):
     qtbot.addWidget(wiz)
     wiz._finish()
     assert wiz.services.settings.setup_completed
+
+
+def test_export_all_accepted(window, qtbot, godot_project, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    page = window.pages["Weapons"]
+    window.services.project.create_asset("weapon", "Axe", "axe")
+    page.refresh_list()
+    page.asset_list.setCurrentRow(0)
+    page.use_3d.setChecked(False)
+    page.run_full()
+    wait_jobs(qtbot, window)
+    page.accept_asset()
+    projects = window.pages["Projects"]
+    projects.godot_dir.setText(str(godot_project))
+    projects.export_all()
+    assert list((godot_project / "assets/generated/weapons").rglob("*.png"))
+    assert window.errors == []

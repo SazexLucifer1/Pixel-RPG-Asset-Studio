@@ -36,8 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pixel_rpg_studio.core.errors import ErrorReport, ExportConflictError, StudioError
-from pixel_rpg_studio.export.godot import is_godot_project, merge_plans, plan_asset_export
+from pixel_rpg_studio.core.errors import ErrorReport, StudioError
 from pixel_rpg_studio.imaging.compare import compare_to_master, side_by_side
 from pixel_rpg_studio.project.asset import (
     ROLE_FINAL,
@@ -49,6 +48,7 @@ from pixel_rpg_studio.project.asset import (
     Asset,
 )
 from pixel_rpg_studio.project.asset_types import get_asset_type
+from pixel_rpg_studio.ui.export_ui import choose_godot_dir, export_assets
 from pixel_rpg_studio.ui.widgets.common import button, page_header
 from pixel_rpg_studio.ui.widgets.dialogs import confirm, open_path
 from pixel_rpg_studio.ui.widgets.image_view import PixelImageView
@@ -405,23 +405,7 @@ class AssetStudioPage(QWidget):
 
     # ----------------------------------------------------------------- export
     def godot_dir(self, ask: bool = True) -> Path | None:
-        project = self.services.project
-        configured = (project.info.godot.project_dir if project else "") or self.services.settings.paths.godot_project_dir
-        if configured and Path(configured).is_dir():
-            return Path(configured)
-        if not ask:
-            return None
-        folder = QFileDialog.getExistingDirectory(self, "Select your Godot project folder (contains project.godot)")
-        if not folder:
-            return None
-        path = Path(folder)
-        if not is_godot_project(path) and not confirm(self, "Not a Godot project",
-                                                      f"{path} does not contain project.godot.\nExport there anyway?"):
-            return None
-        if project:
-            project.info.godot.project_dir = str(path)
-            project.save()
-        return path
+        return choose_godot_dir(self, self.services, ask)
 
     def export_asset(self) -> None:
         asset = self.require_asset()
@@ -430,27 +414,7 @@ class AssetStudioPage(QWidget):
         self.export_assets([asset])
 
     def export_assets(self, assets: list[Asset]) -> None:
-        target = self.godot_dir()
-        if target is None:
-            return
-        project = self.services.project
-        g = project.info.godot
-        try:
-            plan = merge_plans(plan_asset_export(a, target, g.export_subdir, g.write_resources, g.write_helper_scripts) for a in assets)
-            try:
-                written = plan.execute(overwrite=False)
-            except ExportConflictError as conflict:
-                if not confirm(self, "Overwrite files?", f"{len(conflict.conflicts)} file(s) already exist in the Godot project. Overwrite them?",
-                               details=conflict.details):
-                    return
-                written = plan.execute(overwrite=True)
-        except StudioError as exc:
-            self.show_error(exc)
-            return
-        except OSError as exc:
-            self.show_error(exc)
-            return
-        QMessageBox.information(self, "Exported", f"Exported {len(written)} file(s) to\n{target / g.export_subdir}")
+        export_assets(self, self.services, assets, self.show_error)
 
 
 def line(text: str = "", placeholder: str = "") -> QLineEdit:

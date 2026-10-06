@@ -183,6 +183,13 @@ class ProjectsPage(QWidget):
         gf.addRow(self.write_res)
         gf.addRow(self.write_helpers)
         gf.addRow(button("Save Godot Settings", self.save_godot))
+        exp_row = QHBoxLayout()
+        exp_row.addWidget(button("Export All Accepted Assets to Godot", self.export_all, primary=True,
+                                 tooltip="Exports every asset marked 'accepted' in one go (asks before overwriting)"))
+        exp_row.addWidget(button("Game-ready Export to Project Folder", self.export_to_project_folder,
+                                 tooltip="Writes the same files into <project>/exports/godot - copy that folder into any Godot project"))
+        exp_row.addStretch(1)
+        gf.addRow(exp_row)
         lay.addWidget(godot_box)
         services.project_changed.connect(lambda _p: self.refresh())
         self.refresh()
@@ -232,6 +239,38 @@ class ProjectsPage(QWidget):
         d = QFileDialog.getExistingDirectory(self, "Open project folder (contains project.json)", str(self.services.settings.projects_dir()))
         if d:
             self.open(d)
+
+    def _accepted(self):
+        from pixel_rpg_studio.ui.export_ui import exportable
+
+        p = self.services.project
+        if p is None:
+            self.main_window.show_error(StudioError("Open a project first."))
+            return None
+        assets = exportable(p.list_assets(), accepted_only=True)
+        if not assets:
+            self.main_window.show_error(StudioError("No accepted assets with results to export.",
+                                                    hint="Press 'Accept' on finished assets in the studios first."))
+            return None
+        return assets
+
+    def export_all(self) -> None:
+        from pixel_rpg_studio.ui.export_ui import export_assets
+
+        assets = self._accepted()
+        if assets:
+            self.save_godot()
+            export_assets(self, self.services, assets, self.main_window.show_error)
+
+    def export_to_project_folder(self) -> None:
+        from pixel_rpg_studio.ui.export_ui import export_assets
+
+        assets = self._accepted()
+        if assets:
+            target = self.services.project.exports_dir / "godot"
+            target.mkdir(parents=True, exist_ok=True)
+            if export_assets(self, self.services, assets, self.main_window.show_error, target=target):
+                open_path(target)
 
     def save_godot(self) -> None:
         p = self.services.project
