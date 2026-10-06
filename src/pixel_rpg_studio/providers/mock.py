@@ -51,22 +51,34 @@ def _color(rng: np.random.Generator) -> tuple[int, int, int]:
 
 
 def mock_character(size: int, seed: int, prompt: str) -> Image.Image:
+    """A T-pose figure drawn with the same proportions as the blockout humanoid,
+    so demo mode (mock concept + blockout mesh + Blender) projects sensibly."""
     rng = _rng(seed, prompt)
     img = Image.new("RGB", (size, size), (255, 255, 255))
     d = ImageDraw.Draw(img)
-    s = size / 100
+
+    def box(x0, z0, x1, z1, color):  # blockout coordinates in units of body height
+        def px(x):
+            return (50 + x * 90) * size / 100
+
+        def py(z):
+            return (95 - z * 90) * size / 100
+
+        d.rectangle((px(x0), py(z1), px(x1), py(z0)), fill=color)
+
     skin, shirt, pants, hair = (232, 190, 150), _color(rng), _color(rng), _color(rng)
-    d.rectangle((44 * s, 10 * s, 56 * s, 24 * s), fill=skin)  # head
-    d.rectangle((43 * s, 8 * s, 57 * s, 13 * s), fill=hair)
-    d.rectangle((40 * s, 25 * s, 60 * s, 52 * s), fill=shirt)  # torso
-    d.rectangle((18 * s, 27 * s, 40 * s, 33 * s), fill=shirt)  # arms (T-pose)
-    d.rectangle((60 * s, 27 * s, 82 * s, 33 * s), fill=shirt)
-    d.rectangle((14 * s, 27 * s, 18 * s, 33 * s), fill=skin)
-    d.rectangle((82 * s, 27 * s, 86 * s, 33 * s), fill=skin)
-    d.rectangle((41 * s, 52 * s, 49 * s, 90 * s), fill=pants)  # legs
-    d.rectangle((51 * s, 52 * s, 59 * s, 90 * s), fill=pants)
-    d.rectangle((40 * s, 88 * s, 49 * s, 92 * s), fill=(50, 40, 30))
-    d.rectangle((51 * s, 88 * s, 60 * s, 92 * s), fill=(50, 40, 30))
+    box(-0.16, 0.48, 0.16, 0.8, shirt)  # torso
+    box(-0.1, 0.82, 0.1, 1.0, skin)  # head
+    box(-0.1, 0.94, 0.1, 1.0, hair)
+    box(-0.05, 0.79, 0.05, 0.83, skin)  # neck
+    box(0.16, 0.72, 0.46, 0.79, shirt)  # arms
+    box(-0.46, 0.72, -0.16, 0.79, shirt)
+    box(0.46, 0.72, 0.5, 0.79, skin)  # hands
+    box(-0.5, 0.72, -0.46, 0.79, skin)
+    box(0.02, 0.06, 0.14, 0.49, pants)  # legs
+    box(-0.14, 0.06, -0.02, 0.49, pants)
+    box(0.02, 0.0, 0.14, 0.06, (60, 45, 35))  # boots
+    box(-0.14, 0.0, -0.02, 0.06, (60, 45, 35))
     return img
 
 

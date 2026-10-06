@@ -214,21 +214,24 @@ def accept_final(asset: Asset, path: Path, role: str = ROLE_FINAL) -> None:
     asset.save()
 
 
-def projection_texture(source: Path, dest: Path, bleed: int = 4) -> Path:
-    """Concept image -> background removed, cropped to the subject, colours bled
-    into transparent pixels (prevents dark seams when projected onto a mesh)."""
-    img = pixel.crop_to_content(pixel.alpha_threshold(pixel.remove_background(Image.open(source).convert("RGBA"))))
-    arr = np.array(img).astype(np.int32)
+def fill_transparent(img: Image.Image, max_iterations: int = 2048) -> Image.Image:
+    """Give every transparent pixel the colour of its nearest opaque neighbour
+    (iterative dilation), then make the image fully opaque."""
+    arr = np.array(img.convert("RGBA")).astype(np.int64)
     alpha = arr[..., 3] > 0
-    for _ in range(bleed):
+    if not alpha.any():
+        arr[..., 3] = 255
+        return Image.fromarray(arr.astype(np.uint8), "RGBA").copy()
+    h, w = alpha.shape
+    for _ in range(max_iterations):
         if alpha.all():
             break
         pad = np.pad(arr, ((1, 1), (1, 1), (0, 0)))
         pad_a = np.pad(alpha, 1)
-        acc = np.zeros(arr.shape[:2] + (3,), dtype=np.int64)
-        cnt = np.zeros(arr.shape[:2], dtype=np.int64)
+        acc = np.zeros((h, w, 3), dtype=np.int64)
+        cnt = np.zeros((h, w), dtype=np.int64)
         for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            sl = (slice(1 + dy, 1 + dy + arr.shape[0]), slice(1 + dx, 1 + dx + arr.shape[1]))
+            sl = (slice(1 + dy, 1 + dy + h), slice(1 + dx, 1 + dx + w))
             m = pad_a[sl]
             acc += pad[sl][..., :3] * m[..., None]
             cnt += m
@@ -236,7 +239,22 @@ def projection_texture(source: Path, dest: Path, bleed: int = 4) -> Path:
         arr[grow, :3] = acc[grow] // cnt[grow][:, None]
         alpha = alpha | grow
     arr[..., 3] = 255
-    out = Image.fromarray(arr.astype(np.uint8), "RGBA")
+    return Image.fromarray(arr.astype(np.uint8), "RGBA").copy()
+
+
+def projection_texture(source: Path, dest: Path, max_side: int = 512) -> Path:
+    """Concept image -> background removed, cropped to the subject, every
+    transparent pixel filled with the nearest subject colour.
+
+    The filled texture is projected onto the mesh from the front; filling
+    avoids black/background colours wherever the mesh extends beyond the
+    concept's silhouette. Pixel-art targets need no more than ~512 px.
+    """
+    img = pixel.crop_to_content(pixel.alpha_threshold(pixel.remove_background(Image.open(source).convert("RGBA"))))
+    if max(img.size) > max_side:
+        scale = max_side / max(img.size)
+        img = pixel.alpha_threshold(img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.BOX))
+    out = fill_transparent(img)
     dest.parent.mkdir(parents=True, exist_ok=True)
     out.save(dest)
     return dest

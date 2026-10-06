@@ -12,21 +12,28 @@ from pixel_rpg_studio.imaging.pixel import as_array, content_bbox, scale_nearest
 
 @dataclass
 class ConsistencyReport:
+    """How well a frame matches the character's references.
+
+    * colours are compared with the master reference (the approved design)
+    * size is compared with the *render reference* (first rendered front frame)
+      because the concept image and renders are framed differently
+    """
+
     palette_match: float  # 0..1 fraction of frame pixels whose colour exists in the master
-    height_ratio: float  # frame silhouette height / master silhouette height
-    width_ratio: float
-    color_histogram_similarity: float  # 0..1 histogram intersection
+    color_histogram_similarity: float  # 0..1 histogram intersection with the master
+    height_ratio: float | None = None  # frame silhouette height / render reference height
+    width_ratio: float | None = None  # informative only: width depends on direction and pose
 
     @property
     def ok(self) -> bool:
-        return self.palette_match >= 0.8 and 0.75 <= self.height_ratio <= 1.25 and self.color_histogram_similarity >= 0.5
+        size_ok = self.height_ratio is None or 0.7 <= self.height_ratio <= 1.3
+        return self.palette_match >= 0.7 and size_ok
 
     def summary(self) -> str:
-        return (
-            f"Palette match {self.palette_match:.0%}, height {self.height_ratio:.2f}x, "
-            f"width {self.width_ratio:.2f}x, colour similarity {self.color_histogram_similarity:.0%}"
-            + ("" if self.ok else "  - check this frame")
-        )
+        parts = [f"Palette match {self.palette_match:.0%}", f"colour similarity {self.color_histogram_similarity:.0%}"]
+        if self.height_ratio is not None:
+            parts.append(f"height {self.height_ratio:.2f}x of reference render")
+        return ", ".join(parts) + ("" if self.ok else "  - check this frame")
 
 
 def _opaque_colors(img: Image.Image) -> np.ndarray:
@@ -43,18 +50,20 @@ def _hist(colors: np.ndarray, bins: int = 8) -> np.ndarray:
     return h / h.sum()
 
 
-def compare_to_master(master: Image.Image, frame: Image.Image) -> ConsistencyReport:
+def compare_to_master(master: Image.Image, frame: Image.Image, size_reference: Image.Image | None = None) -> ConsistencyReport:
     mc, fc = _opaque_colors(master), _opaque_colors(frame)
     if len(fc) == 0 or len(mc) == 0:
-        return ConsistencyReport(0.0, 0.0, 0.0, 0.0)
+        return ConsistencyReport(0.0, 0.0, 0.0 if size_reference is not None else None)
     master_set = {tuple(c) for c in np.unique(mc, axis=0)}
-    in_master = np.array([tuple(c) in master_set for c in fc])
-    palette_match = float(in_master.mean())
-    mb, fb = content_bbox(master), content_bbox(frame)
-    mh, mw = (mb[3] - mb[1]), (mb[2] - mb[0])
-    fh, fw = (fb[3] - fb[1]), (fb[2] - fb[0])
+    palette_match = float(np.mean([tuple(c) in master_set for c in fc]))
     hist_sim = float(np.minimum(_hist(mc), _hist(fc)).sum())
-    return ConsistencyReport(palette_match, fh / max(1, mh), fw / max(1, mw), hist_sim)
+    height_ratio = width_ratio = None
+    if size_reference is not None:
+        rb, fb = content_bbox(size_reference), content_bbox(frame)
+        if rb and fb:
+            height_ratio = (fb[3] - fb[1]) / max(1, rb[3] - rb[1])
+            width_ratio = (fb[2] - fb[0]) / max(1, rb[2] - rb[0])
+    return ConsistencyReport(palette_match, hist_sim, height_ratio, width_ratio)
 
 
 def side_by_side(images: list[Image.Image], labels: list[str] | None = None, scale: int = 4, gap: int = 8, background=(40, 40, 48, 255)) -> Image.Image:

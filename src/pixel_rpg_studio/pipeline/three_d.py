@@ -54,6 +54,7 @@ from pixel_rpg_studio.providers.base import AnimationSpec, PrepareRequest, Rende
 
 MODEL_EXTENSIONS = (".glb", ".gltf", ".obj", ".fbx", ".stl", ".ply")
 STATIC = "static"
+UPRIGHT_ANIMATIONS = ("idle", "walk", "run", "block", "cast")
 
 
 def default_settings(asset: Asset, style) -> dict[str, Any]:
@@ -143,6 +144,7 @@ def import_model(asset: Asset, source: Path) -> Path:
 def _invalidate_scene(asset: Asset) -> None:
     asset.meta.settings.pop("blend", None)
     asset.meta.settings.pop("camera_framing", None)
+    asset.meta.outputs.pop("render_reference", None)
 
 
 def prepare_model(ctx: PipelineContext, asset: Asset, progress: Progress) -> dict[str, Any]:
@@ -243,6 +245,8 @@ def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animat
     steps = pixel.steps_from_style(style, palette_for(ctx.project, asset), W, H, source="render")
     master_path = asset.output_path(ROLE_MASTER)
     master = Image.open(master_path) if master_path else None
+    size_ref_path = asset.output_path("render_reference")
+    size_ref = Image.open(size_ref_path) if size_ref_path else None
     finals: dict[tuple[str, str], list[Path]] = {}
     total = sum(len(v) for v in result.frames.values())
     done = 0
@@ -257,8 +261,16 @@ def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animat
                 shutil.copyfile(raw_src, raw)
             ctx.providers.processing.process(raw, steps, final)
             finals.setdefault((anim, direction), []).append(final)
+            if anim != STATIC and size_ref is None and direction == dirs[0] and idx == 0:
+                # First rendered front frame becomes the size reference for all later frames.
+                ref = asset.path("render_reference.png")
+                shutil.copyfile(final, ref)
+                asset.set_output("render_reference", ref)
+                size_ref = Image.open(ref)
             if master is not None and anim != STATIC:
-                consistency[f"{anim}/{direction}/{idx}"] = compare_to_master(master, Image.open(final)).summary()
+                # Size is only comparable for upright poses (death/dodge/... change the silhouette on purpose).
+                ref_for_size = size_ref if anim in UPRIGHT_ANIMATIONS else None
+                consistency[f"{anim}/{direction}/{idx}"] = compare_to_master(master, Image.open(final), ref_for_size).summary()
             done += 1
             progress.progress(0.8 + 0.2 * done / max(1, total), f"Pixel processing {done}/{total}")
     asset.add_generation(GenerationRecord(stage="pixel_process", provider=ctx.providers.processing.id, params={"steps": steps},

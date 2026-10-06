@@ -139,6 +139,8 @@ class CharacterStudioPage(AssetStudioPage):
             loop.setChecked(d["loop"])
             self.anim_table.setCellWidget(row, 3, loop)
         self.anim_table.setFixedHeight(300)
+        for col, width in ((1, 62), (2, 62), (3, 40)):
+            self.anim_table.setColumnWidth(col, width)
         a.addRow(self.anim_table)
         note = QLabel("Automatic rigging is heuristic (upright T/A-pose humanoids). Check the rig report after "
                       "'Prepare model'; you can fix the rig in Blender ('Open .blend') and re-render.")
@@ -446,6 +448,12 @@ class CharacterStudioPage(AssetStudioPage):
         frame_p = self.preview.paths[self.preview.index] if self.preview.paths else None
         if master_p and frame_p:
             master, frame = Image.open(master_p).convert("RGBA"), Image.open(frame_p).convert("RGBA")
-            summary = compare_to_master(master, frame).summary()
-            return [master, frame], ["Master reference", f"{self.anim_combo.currentText()} frame {self.preview.index}"], summary
+            ref_p = asset.output_path("render_reference")
+            ref = Image.open(ref_p).convert("RGBA") if ref_p else None
+            summary = compare_to_master(master, frame, ref).summary()
+            images, labels = [master], ["Master reference"]
+            if ref is not None:
+                images.append(ref)
+                labels.append("Render reference")
+            return images + [frame], labels + [f"{self.anim_combo.currentText()} frame {self.preview.index}"], summary
         return super().compare_images()
