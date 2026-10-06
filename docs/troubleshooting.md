@@ -10,6 +10,12 @@ Logs live in `%APPDATA%\PixelRPGAssetStudio\logs\`:
 | `comfyui.log` | ComfyUI output (only when the app started ComfyUI) |
 | `blender.log` | every Blender run |
 
+## Starting the app
+
+| Symptom | Cause / fix |
+|---|---|
+| "Failed to extract …: decompression resulted in return code -1" when starting `PixelRPGAssetStudio.exe` | The single-file exe unpacks itself into the Windows temp folder on C: first; **C: is full**. Use the **folder version** (`PixelRPGAssetStudio-…-onedir.zip`, extract e.g. to `E:\PixelRPG` and start `PixelRPGAssetStudio\PixelRPGAssetStudio.exe`); it unpacks nothing. Or free space on C:. |
+
 ## ComfyUI
 
 | Symptom | Cause / fix |

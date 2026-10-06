@@ -26,7 +26,7 @@ New asset types are added through the registry in `project/asset_types.py` and r
 
 ## Quick start (users)
 
-1. Download `PixelRPGAssetStudio.exe` from the GitHub **Actions** artifacts or **Releases** page.
+1. Download from the GitHub **Actions** artifacts or the **Releases** page: either the **folder version** (`…-onedir.zip`, recommended: extract anywhere, starts fast, needs no space on C:) or the single `PixelRPGAssetStudio.exe` (unpacks itself to the temp folder on C: at every start).
 2. Double-click it. The setup wizard detects your GPU, ComfyUI and Blender, and explains anything that is missing.
 3. Install whatever is missing. Every item has a download link:
    - **ComfyUI** (Portable or Desktop) – runs the AI models
