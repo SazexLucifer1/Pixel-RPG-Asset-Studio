@@ -80,14 +80,15 @@ def test_nothing_detected(tmp_path):
 
 def test_process_start_wait_and_crash(tmp_path):
     # A "ComfyUI" that exits immediately must produce a clear error, not hang.
+    from pathlib import Path
+
+    from pixel_rpg_studio.comfyui.launcher import ComfyInstall
+
     root = tmp_path / "manual"
-    (root / "comfy").mkdir(parents=True)
+    root.mkdir()
     (root / "main.py").write_text("import sys; print('broken custom node'); sys.exit(3)")
-    venv = root / "venv" / ("Scripts" if sys.platform == "win32" else "bin")
-    venv.mkdir(parents=True)
-    py = venv / ("python.exe" if sys.platform == "win32" else "python")
-    py.symlink_to(sys.executable)
-    inst = detect_install(root)
+    # Use the running interpreter directly (symlinks need extra privileges on Windows).
+    inst = ComfyInstall("manual", root, python=Path(sys.executable), main_py=root / "main.py", data_dir=root)
     proc = ComfyUIProcess()
     proc.start(inst, AppSettings(), low_vram=False)
     from pixel_rpg_studio.core.errors import BackendUnavailableError
