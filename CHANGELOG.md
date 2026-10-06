@@ -10,4 +10,4 @@
 - Single-frame regeneration with identical camera framing and settings
 - Weapons/items/props/environment/buildings (multi-view), seamless tiles and Godot terrain tilesets, backgrounds with parallax layers, procedural VFX, sprite sheet builder
 - Godot export with conflict protection and helper script
-- 135+ automated tests (fake ComfyUI server, real Blender, offscreen UI); Windows build script and GitHub Actions
+- 134 automated tests (fake ComfyUI server, real Blender, offscreen UI); Windows build script and GitHub Actions
