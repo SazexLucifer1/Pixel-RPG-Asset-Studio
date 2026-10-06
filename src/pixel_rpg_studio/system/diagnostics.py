@@ -125,12 +125,22 @@ def check_gpu(gpus=None) -> list[CheckResult]:
 
 
 def check_disk(settings: AppSettings) -> list[CheckResult]:
-    results = []
-    targets = {"Projects folder": settings.projects_dir(), "Application data": paths.app_data_dir()}
+    """Free space where data actually grows. Each folder has its own requirement:
+    settings/logs need almost nothing, AI models need 10-20 GB."""
+    targets: list[tuple[str, Path, float, float, str]] = [
+        ("Projects folder", settings.projects_dir(), 10, 2,
+         "Generated assets are stored here. Choose a folder on a drive with more space: Settings → Default projects folder."),
+        ("Application data (settings, logs)", paths.app_data_dir(), 1, 0.2,
+         "Only settings and logs are stored here (a few MB)."),
+    ]
     if settings.comfyui.install_dir:
-        targets["ComfyUI folder"] = Path(settings.comfyui.install_dir)
-    seen = set()
-    for name, path in targets.items():
+        targets.append(("ComfyUI folder (AI models)", Path(settings.comfyui.install_dir), 30, 5,
+                        "AI models need ~10-20 GB. Install ComfyUI (Portable) on a drive with more space and select it in Settings."))
+    if settings.paths.comfyui_models_dir:
+        targets.append(("ComfyUI models folder", Path(settings.paths.comfyui_models_dir), 20, 5,
+                        "AI models need ~10-20 GB of free space."))
+    results = []
+    for name, path, warn_gb, error_gb, hint in targets:
         probe = path
         while not probe.exists() and probe.parent != probe:
             probe = probe.parent
@@ -139,14 +149,11 @@ def check_disk(settings: AppSettings) -> list[CheckResult]:
         except OSError as exc:
             results.append(CheckResult("Storage", f"Disk space ({name})", WARN, f"Cannot read disk usage: {exc}"))
             continue
-        key = (usage.total, usage.free)
-        if key in seen:
-            continue
-        seen.add(key)
         free_gb = usage.free / 1024**3
-        status = OK if free_gb >= 30 else (WARN if free_gb >= 5 else ERROR)
-        results.append(CheckResult("Storage", f"Disk space ({name})", status, f"{free_gb:.1f} GB free on {probe.anchor or probe}",
-                                   hint="" if status == OK else "AI models need ~10-20 GB; generated projects need a few GB. Free some space."))
+        status = OK if free_gb >= warn_gb else (WARN if free_gb >= error_gb else ERROR)
+        results.append(CheckResult("Storage", f"Disk space ({name})", status,
+                                   f"{free_gb:.1f} GB free on {probe.anchor or probe} (recommended: {warn_gb:g} GB)",
+                                   details=str(path), hint="" if status == OK else hint))
     return results
 
 

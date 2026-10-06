@@ -91,3 +91,22 @@ def test_diagnostic_offline():
     server = next(r for r in rep.results if r.name == "Server")
     assert server.status in ("error", "missing") and server.hint
     assert isinstance(rep, DiagnosticReport)
+
+
+def test_disk_check_thresholds_per_folder(tmp_path, monkeypatch):
+    import shutil as sh
+    from collections import namedtuple
+
+    from pixel_rpg_studio.system import diagnostics
+
+    Usage = namedtuple("Usage", "total used free")
+    monkeypatch.setattr(diagnostics.shutil, "disk_usage", lambda p: Usage(100 * 1024**3, 0, int(9.6 * 1024**3)))
+    s = AppSettings()
+    s.paths.projects_dir = str(tmp_path / "projects")
+    s.comfyui.install_dir = str(tmp_path / "comfy")
+    res = {r.name: r for r in diagnostics.check_disk(s)}
+    assert res["Disk space (Application data (settings, logs))"].status == "ok"  # tiny data: 9.6 GB is plenty
+    assert res["Disk space (Projects folder)"].status == "warning"
+    assert res["Disk space (ComfyUI folder (AI models))"].status == "warning"
+    assert "Settings" in res["Disk space (Projects folder)"].hint
+    assert sh  # keep import used

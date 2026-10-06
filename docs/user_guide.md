@@ -107,3 +107,15 @@ Existing files are never overwritten without asking.
 ## Low VRAM
 
 *Settings → VRAM profile* is `auto` by default: ≤ 8 GB selects **low** (smaller images, ComfyUI `--lowvram`, models unloaded after each stage). An RTX 3060 12 GB uses **medium**. Stages always run one after another.
+
+## Using another drive (e.g. when C: is full)
+
+Only three places grow large, and all of them can live on another drive:
+
+| What | Size | How to move it |
+|---|---|---|
+| ComfyUI + AI models | 15–25 GB | Extract **ComfyUI Portable** to e.g. `E:\AI\ComfyUI_windows_portable` and select that folder in *Settings → ComfyUI* (models go into its `ComfyUI\models\...`). Or keep ComfyUI elsewhere and put models on E: via ComfyUI's `extra_model_paths.yaml`, then set *Settings → ComfyUI models folder (override)*. |
+| Your projects (generated assets) | a few GB | *Settings → Default projects folder* → e.g. `E:\PixelRPG\Projects`. Then create a new project on the *Projects* page. Existing projects can simply be moved with Explorer and reopened via *Open Folder…*. |
+| The app itself | ~150 MB | Put `PixelRPGAssetStudio.exe` anywhere, e.g. `E:\PixelRPG\`. |
+
+Settings and logs stay in `%APPDATA%\PixelRPGAssetStudio` (a few MB). To move those too, set the environment variable `PIXEL_RPG_STUDIO_HOME` to a folder on E:.
