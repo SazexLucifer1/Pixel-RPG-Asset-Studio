@@ -25,7 +25,7 @@ class BackendManager(QObject):
     def __init__(self, services, poll_ms: int = 5000) -> None:
         super().__init__()
         self.services = services
-        self.process = ComfyUIProcess()
+        self.process = getattr(services, "comfy_process", None) or ComfyUIProcess()
         self.last_status = ServerStatus(False, services.settings.comfyui.base_url, error="Not checked yet")
         self._busy = threading.Lock()
         self._starting = False

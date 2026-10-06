@@ -16,7 +16,7 @@ Modes
              deterministic "toon" shading (works with Cycles and EEVEE).
 
 Every run writes a JSON report (``report_path``) with warnings and results.
-Compatible with Blender 3.6 LTS - 4.x.
+Compatible with Blender 3.6 LTS - 5.x (tested with 4.2 LTS and 5.2 LTS).
 """
 
 import json
@@ -82,6 +82,12 @@ def info(msg):
 
 
 # ----------------------------------------------------------------- utilities
+def enable_nodes(idblock):
+    """Blender < 5 needs use_nodes = True; from 5.0 nodes are always on and the
+    property is deprecated (removed in 6.0)."""
+    if bpy.app.version < (5, 0, 0):
+        idblock.use_nodes = True
+
 def ensure_object_mode():
     if bpy.context.object and bpy.context.object.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -269,7 +275,7 @@ def build_toon_material(name, color_source, shading, light_dir, image_path=None,
     and fixed relative to the camera (the model is rotated, never the light).
     """
     mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
+    enable_nodes(mat)
     nt = mat.node_tree
     for n in list(nt.nodes):
         nt.nodes.remove(n)
@@ -364,7 +370,7 @@ def apply_materials(obj, cfg, light_dir):
             src = slot.material
             image = None
             color = (0.7, 0.7, 0.7)
-            if src and src.use_nodes:
+            if src and src.node_tree is not None:
                 for n in src.node_tree.nodes:
                     if n.type == "TEX_IMAGE" and n.image is not None:
                         image = n.image
@@ -814,7 +820,7 @@ def setup_render(cfg):
     scene.view_settings.gamma = 1.0
     if scene.world is None:
         scene.world = bpy.data.worlds.new("StudioWorld")
-    scene.world.use_nodes = True
+    enable_nodes(scene.world)
     bg = scene.world.node_tree.nodes.get("Background")
     if bg:
         bg.inputs[0].default_value = (0, 0, 0, 1)
@@ -951,7 +957,7 @@ def run_render(job):
         ld = light_vector(*job["light"]["direction"])
         ld.rotate(Quaternion(Vector((0, 0, 1)), math.radians(float(job.get("camera", {}).get("yaw_offset_deg", 0.0)))))
         for mat in bpy.data.materials:
-            if mat.use_nodes:
+            if mat.node_tree is not None:
                 for n in mat.node_tree.nodes:
                     if n.type == "COMBXYZ":
                         n.inputs[0].default_value, n.inputs[1].default_value, n.inputs[2].default_value = ld

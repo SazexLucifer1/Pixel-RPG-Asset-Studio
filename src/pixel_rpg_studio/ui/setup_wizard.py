@@ -39,6 +39,8 @@ NOT_FOUND_HINT = (
 class _Bridge(QObject):
     done = Signal(object)
     progress = Signal(str)
+    restart = Signal()
+    failed = Signal()
 
 
 class SetupWizard(QWizard):
@@ -112,6 +114,13 @@ class SetupWizard(QWizard):
         lay.addLayout(brow)
         lay.addWidget(self.blender_info)
         lay.addWidget(button("Open Download Page (Blender)", lambda: open_url("https://www.blender.org/download/")), 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addSpacing(16)
+        lay.addWidget(QLabel("<b>Projects folder</b> – generated assets are stored here (choose a drive with free space)"))
+        self.projects = QLineEdit(str(s.projects_dir()))
+        prow = QHBoxLayout()
+        prow.addWidget(self.projects)
+        prow.addWidget(button("Choose Folder", self._pick_projects))
+        lay.addLayout(prow)
         self.mock = QCheckBox("I just want to try the interface first (demo mode with mock providers – no AI)")
         self.mock.setChecked(s.use_mock_providers)
         lay.addSpacing(16)
@@ -133,9 +142,16 @@ class SetupWizard(QWizard):
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.check_status = QLabel("")
+        self.check_status.setWordWrap(True)
         lay.addWidget(self.table, 1)
         lay.addWidget(self.check_status)
-        lay.addWidget(button("Run Diagnostic Again", self._run_check), 0, Qt.AlignmentFlag.AlignLeft)
+        row = QHBoxLayout()
+        self.start_btn = button("Start ComfyUI now", self._start_comfy, primary=True,
+                                tooltip="Starts the selected ComfyUI so models and workflows can be checked")
+        row.addWidget(self.start_btn)
+        row.addWidget(button("Run Diagnostic Again", self._run_check))
+        row.addStretch(1)
+        lay.addLayout(row)
         note = QLabel("Missing models? Open the AI Models page after setup – it shows download links and licenses. "
                       "You can finish setup now and come back later.")
         note.setWordWrap(True)
@@ -144,6 +160,8 @@ class SetupWizard(QWizard):
         self.bridge = _Bridge()
         self.bridge.done.connect(self._fill)
         self.bridge.progress.connect(self.check_status.setText)
+        self.bridge.restart.connect(lambda: (self.start_btn.setEnabled(True), self._run_check()))
+        self.bridge.failed.connect(lambda: self.start_btn.setEnabled(True))
         p.initializePage = self._run_check  # type: ignore[method-assign]
         return p
 
@@ -159,6 +177,44 @@ class SetupWizard(QWizard):
         s.comfyui.auto_start = self.auto_start.isChecked()
         s.blender.executable = self.blender.text().strip()
         s.use_mock_providers = self.mock.isChecked()
+        if self.projects.text().strip():
+            s.paths.projects_dir = self.projects.text().strip()
+        # rebuild the ComfyUI client (address/port may have changed); saved on Finish
+        self.services.apply_settings(save=False)
+
+    def _pick_projects(self) -> None:
+        d = QFileDialog.getExistingDirectory(self, "Projects folder", self.projects.text())
+        if d:
+            self.projects.setText(d)
+
+    def _start_comfy(self) -> None:
+        from pixel_rpg_studio.comfyui.launcher import resolve_install
+        from pixel_rpg_studio.core.errors import StudioError
+        from pixel_rpg_studio.system.gpu import resolve_profile
+
+        self._apply()
+        settings = self.services.settings
+        install = resolve_install(settings)
+        if install is None:
+            self.check_status.setText("No ComfyUI installation selected - go back one page and choose its folder.")
+            return
+        self.start_btn.setEnabled(False)
+        self.check_status.setText("Starting ComfyUI... the first start can take a few minutes.")
+        services = self.services
+
+        def work():
+            try:
+                if not services.client.is_alive():
+                    services.comfy_process.start(install, settings, low_vram=resolve_profile(settings.gpu.vram_profile).comfy_low_vram_flag)
+                    services.comfy_process.wait_until_ready(services.client.is_alive, settings.comfyui.start_timeout_s,
+                                                            progress=self.bridge.progress.emit)
+                self.bridge.progress.emit("ComfyUI is running - checking again...")
+                self.bridge.restart.emit()
+            except StudioError as exc:
+                self.bridge.progress.emit(f"ComfyUI could not be started: {exc.message} {exc.hint}")
+                self.bridge.failed.emit()
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _pick_comfy(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "ComfyUI folder")

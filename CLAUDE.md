@@ -18,7 +18,7 @@ core (config, paths, errors, jobs, logging) · project (project, asset, style, a
 - No node IDs or model filenames in Python code: they belong in `workflows/*.json` + manifests and `config/models_catalog.json`.
 - Image processing stays deterministic and lives in `imaging/` as pure functions.
 - Pillow ≥ 12: always `.copy()` an image created with `Image.fromarray` before drawing on it in place (see `imaging.pixel.from_array`).
-- `studio_blender.py` must stay compatible with Blender 3.6–4.x and use only bpy/bmesh/mathutils/numpy.
+- `studio_blender.py` must stay compatible with Blender 3.6–5.x (tested: 4.2 LTS, 5.2 LTS) and use only bpy/bmesh/mathutils/numpy.
 - Never commit model weights, generated assets, user projects or secrets.
 - New asset type: register in `project/asset_types.py`, compose from `pipeline/common.py` + `pipeline/three_d.py`, add a page (often `ObjectStudioPage`).
 - Docs to keep updated: README.md, docs/user_guide.md, docs/troubleshooting.md, docs/decisions.md.

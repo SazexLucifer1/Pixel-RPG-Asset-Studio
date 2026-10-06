@@ -123,3 +123,34 @@ def test_export_all_accepted(window, qtbot, godot_project, monkeypatch):
     projects.export_all()
     assert list((godot_project / "assets/generated/weapons").rglob("*.png"))
     assert window.errors == []
+
+
+def test_setup_wizard_projects_folder_and_start_button(qtbot, mock_settings, tmp_path):
+    from pixel_rpg_studio.ui.services import Services
+    from pixel_rpg_studio.ui.setup_wizard import SetupWizard
+
+    wiz = SetupWizard(Services(mock_settings, gpus=[]))
+    qtbot.addWidget(wiz)
+    wiz.projects.setText(str(tmp_path / "E_drive" / "Projects"))
+    wiz.comfy.setText("")
+    wiz._start_comfy()  # nothing selected -> explained, no crash
+    assert "No ComfyUI installation" in wiz.check_status.text()
+    wiz._finish()
+    assert wiz.services.settings.paths.projects_dir.endswith("Projects")
+
+
+def test_comfy_installed_but_not_running_is_warning(tmp_path):
+    import sys
+
+    from pixel_rpg_studio.comfyui.client import ComfyUIClient
+    from pixel_rpg_studio.core.config import AppSettings
+    from pixel_rpg_studio.system.diagnostics import check_comfyui
+
+    root = tmp_path / "ComfyUI"
+    (root / "comfy").mkdir(parents=True)
+    (root / "main.py").write_text("")
+    s = AppSettings()
+    s.comfyui.install_dir = str(root)
+    server = [r for r in check_comfyui(s, ComfyUIClient("http://127.0.0.1:9", 1)) if r.name == "Server"][0]
+    assert server.status == "warning" and "Not running yet" in server.summary
+    assert sys

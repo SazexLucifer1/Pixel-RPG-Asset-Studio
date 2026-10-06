@@ -45,6 +45,10 @@ class Services(QObject):
         self.client: ComfyUIClient = make_client(settings)
         self.providers: ProviderSet = build_providers(settings, self.library, self.client, gpus)
         self.error_handler: Callable[[Any], None] | None = None
+        # The ComfyUI process started by this app (shared by setup wizard and backend manager).
+        from pixel_rpg_studio.comfyui.launcher import ComfyUIProcess
+
+        self.comfy_process = ComfyUIProcess()
 
     # -------------------------------------------------------------- settings
     def apply_settings(self, settings: AppSettings | None = None, save: bool = True) -> None:

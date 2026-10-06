@@ -188,11 +188,18 @@ def check_comfyui(settings: AppSettings, client=None) -> list[CheckResult]:
         results.append(CheckResult("ComfyUI", "Server", OK, f"Running at {st.url} (version {st.version or 'unknown'})",
                                    details=json.dumps(st.devices, indent=2)))
     else:
-        results.append(CheckResult("ComfyUI", "Server", ERROR if install else MISSING,
-                                   f"Not reachable at {settings.comfyui.base_url}",
-                                   details=st.error if st else "",
-                                   hint="Press 'Start ComfyUI'. If you use ComfyUI Desktop, its default port is 8000 - check Settings.",
-                                   actions=["start_comfyui"]))
+        if install is not None:
+            # Installed but not running is normal (e.g. during setup): a warning, not an error.
+            auto = " - starts automatically with the app" if (settings.comfyui.auto_start and install.can_autostart) else ""
+            results.append(CheckResult("ComfyUI", "Server", WARN, f"Not running yet at {settings.comfyui.base_url}{auto}",
+                                       details=st.error if st else "",
+                                       hint="Press 'Start ComfyUI'. If it does not start, open the ComfyUI log (Diagnostics page).",
+                                       actions=["start_comfyui"]))
+        else:
+            results.append(CheckResult("ComfyUI", "Server", MISSING, f"Not reachable at {settings.comfyui.base_url}",
+                                       details=st.error if st else "",
+                                       hint="Install ComfyUI and select it in Settings, or start your ComfyUI and check the address/port.",
+                                       actions=["start_comfyui"]))
     return results
 
 
