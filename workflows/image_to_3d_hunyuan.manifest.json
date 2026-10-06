@@ -2,7 +2,7 @@
   "name": "image_to_3d_hunyuan",
   "title": "Image to 3D shape (Hunyuan3D 2 mini, native ComfyUI nodes)",
   "kind": "image_to_3d",
-  "description": "Generates an untextured mesh (GLB) from a single concept image. Shape only - colors are projected from the concept image in Blender. Requires a recent ComfyUI with native Hunyuan3D v2 nodes.",
+  "description": "Generates an untextured mesh (GLB) from a single concept image. Shape only - colors are projected from the concept image in Blender. Requires a recent ComfyUI with native Hunyuan3D v2 nodes. Node settings follow ComfyUI's official Hunyuan3D blueprint.",
   "requirements": [
     "ComfyUI with native Hunyuan3D v2 nodes (ComfyUI 0.3.27 or newer)",
     "Hunyuan3D-2mini shape model in models/checkpoints (role threed.shape_model)"
@@ -73,6 +73,12 @@
       "node": "10",
       "input": "filename_prefix",
       "type": "string"
+    },
+    "mesh_algorithm": {
+      "node": "9",
+      "input": "algorithm",
+      "type": "string",
+      "description": "surface net (smooth) or basic"
     }
   },
   "models": {

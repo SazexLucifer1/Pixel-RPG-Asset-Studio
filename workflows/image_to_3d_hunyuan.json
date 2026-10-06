@@ -100,13 +100,17 @@
     }
   },
   "9": {
-    "class_type": "VoxelToMeshBasic",
+    "class_type": "VoxelToMesh",
     "inputs": {
       "voxel": [
         "8",
         0
       ],
+      "algorithm": "surface net",
       "threshold": 0.6
+    },
+    "_meta": {
+      "title": "Voxel to mesh (surface net)"
     }
   },
   "10": {

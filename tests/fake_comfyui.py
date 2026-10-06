@@ -31,7 +31,7 @@ def object_info():
     }
     for n in ("CLIPTextEncode", "EmptyLatentImage", "KSampler", "VAEDecode", "SaveImage", "LoadImage", "VAEEncode",
               "ImageScaleToTotalPixels", "CLIPVisionEncode", "Hunyuan3Dv2Conditioning", "EmptyLatentHunyuan3Dv2",
-              "ModelSamplingAuraFlow", "VAEDecodeHunyuan3D", "VoxelToMeshBasic", "SaveGLB"):
+              "ModelSamplingAuraFlow", "VAEDecodeHunyuan3D", "VoxelToMeshBasic", "VoxelToMesh", "SaveGLB"):
         info[n] = {"input": simple}
     return info
 
