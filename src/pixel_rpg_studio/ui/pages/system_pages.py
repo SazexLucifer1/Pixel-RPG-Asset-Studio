@@ -694,7 +694,7 @@ class SettingsPage(QWidget):
         crow = QHBoxLayout()
         crow.addWidget(self.comfy_dir)
         crow.addWidget(button("Choose Folder…", self._pick_comfy))
-        crow.addWidget(button("Choose ComfyUI.exe…", self._pick_comfy_exe))
+        crow.addWidget(button("Choose .exe…", self._pick_comfy_exe))
         self.comfy_type = QComboBox()
         self.comfy_type.addItems(COMFYUI_INSTALL_TYPES)
         self.host = QLineEdit()
@@ -828,7 +828,7 @@ class SettingsPage(QWidget):
             self._apply_comfy(d)
 
     def _pick_comfy_exe(self) -> None:
-        f, _ = QFileDialog.getOpenFileName(self, "ComfyUI Desktop executable", "", "ComfyUI (ComfyUI.exe);;Programs (*.exe)")
+        f, _ = QFileDialog.getOpenFileName(self, "Comfy Desktop / ComfyUI program", "", "Programs (*.exe);;All files (*)")
         if f:
             self._apply_comfy(f)
 
@@ -837,7 +837,8 @@ class SettingsPage(QWidget):
         if inst is None:
             self.comfy_dir.setText(path)
             self.main_window.show_error(StudioError(f"No ComfyUI installation recognised at {path}.",
-                                                    hint="Select the ComfyUI_windows_portable folder, a ComfyUI git folder (with main.py) or ComfyUI.exe."))
+                                                    hint="Select the ComfyUI_windows_portable folder, a Comfy Desktop installation "
+                                                    "(%LOCALAPPDATA%\\Comfy-Desktop\\ComfyUI-Installs\\<name>), a ComfyUI git folder (with main.py) or the ComfyUI program (.exe)."))
         else:
             import copy
 

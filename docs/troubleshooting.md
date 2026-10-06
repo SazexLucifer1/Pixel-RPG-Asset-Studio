@@ -15,7 +15,8 @@ Logs live in `%APPDATA%\PixelRPGAssetStudio\logs\`:
 | Symptom | Cause / fix |
 |---|---|
 | "ComfyUI not running" | Press *ComfyUI ▾ → Start ComfyUI* in the status bar. Check *Settings → ComfyUI*: install folder, host and port. **ComfyUI Desktop uses port 8000**; Portable uses 8188. |
-| "ComfyUI installation not found" | *Settings → Choose Folder…*. For Portable, pick the folder that contains `run_nvidia_gpu.bat` and `python_embeded`. For Desktop, use *Choose ComfyUI.exe…*. |
+| "ComfyUI installation not found" | *Settings → Choose Folder…*. For Portable, pick the folder that contains `run_nvidia_gpu.bat` and `python_embeded`. For the **new Comfy Desktop**, pick `%LOCALAPPDATA%\Comfy-Desktop\ComfyUI-Installs\<installation name>` (paste the path into the folder dialog's address bar); the studio then starts that ComfyUI directly. Older Desktop versions: *Choose .exe…*. |
+| "installation was interrupted" / ENOSPC during Comfy Desktop setup | The disk ran full. Delete the half-installed folder under `%LOCALAPPDATA%\Comfy-Desktop\ComfyUI-Installs\`, free ≥ 30 GB (or use ComfyUI Portable on another drive) and install again. |
 | "ComfyUI exited during startup" | Open the ComfyUI log. The most common cause is a broken custom node or a missing dependency after a ComfyUI update. Start ComfyUI manually once to see the error. |
 | "did not become ready within … s" | The first start can take minutes. Raise *Settings → Start timeout*. |
 | "Required model missing: …" | The workflow needs a model file that ComfyUI does not have. Use *AI Models* for download links, or *Choose Installed File…* to pick an alternative. |

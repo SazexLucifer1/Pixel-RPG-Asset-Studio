@@ -29,6 +29,13 @@ from pixel_rpg_studio.ui.widgets.common import button
 from pixel_rpg_studio.ui.widgets.dialogs import open_url
 
 
+NOT_FOUND_HINT = (
+    "No ComfyUI installation found automatically. Choose its folder:\n"
+    "• Comfy Desktop: %LOCALAPPDATA%\\Comfy-Desktop\\ComfyUI-Installs\\<your installation name>\n"
+    "• ComfyUI Portable: the folder containing run_nvidia_gpu.bat"
+)
+
+
 class _Bridge(QObject):
     done = Signal(object)
     progress = Signal(str)
@@ -78,8 +85,10 @@ class SetupWizard(QWizard):
         row = QHBoxLayout()
         row.addWidget(self.comfy)
         row.addWidget(button("Choose Folder", self._pick_comfy))
+        row.addWidget(button("Choose .exe", self._pick_comfy_exe))
         row.addWidget(button("Auto-detect", self._detect_comfy))
-        lay.addWidget(QLabel("<b>ComfyUI</b> – Portable folder (with run_nvidia_gpu.bat), Desktop app (ComfyUI.exe) or a git install"))
+        lay.addWidget(QLabel("<b>ComfyUI</b> – Portable folder (with run_nvidia_gpu.bat), Comfy Desktop installation, "
+                             "Desktop app (.exe) or a git install"))
         lay.addLayout(row)
         lay.addWidget(self.comfy_info)
         dl = QHBoxLayout()
@@ -157,12 +166,18 @@ class SetupWizard(QWizard):
             self.comfy.setText(d)
             self._describe_comfy()
 
+    def _pick_comfy_exe(self) -> None:
+        f, _ = QFileDialog.getOpenFileName(self, "Comfy Desktop / ComfyUI program", "", "Programs (*.exe);;All files (*)")
+        if f:
+            self.comfy.setText(f)
+            self._describe_comfy()
+
     def _detect_comfy(self) -> None:
         found = find_installations()
         if found:
             inst = found[0]
             self.comfy.setText(str(inst.executable if inst.kind == "desktop" and inst.executable else inst.root))
-        self._describe_comfy(none_text="No ComfyUI installation found automatically. Install ComfyUI or choose its folder.")
+        self._describe_comfy(none_text=NOT_FOUND_HINT)
 
     def _describe_comfy(self, none_text: str = "Not recognised as a ComfyUI installation.") -> None:
         inst = detect_install(self.comfy.text().strip()) if self.comfy.text().strip() else None

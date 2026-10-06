@@ -96,13 +96,72 @@ def desktop_config_base_path() -> Path | None:
     return None
 
 
+def _is_comfy_executable(path: Path) -> bool:
+    """ComfyUI.exe (classic Desktop), "Comfy Desktop.exe" (new Desktop) and similar."""
+    name = path.name.lower()
+    if "comfy" not in name or "uninstall" in name:
+        return False
+    return name.endswith(".exe") or (sys.platform != "win32" and path.suffix == "")
+
+
+def _env_python(comfy_dir: Path) -> Path | None:
+    """Python of a ComfyUI checkout: its .venv/venv, or a sibling standalone-env (new Comfy Desktop)."""
+    python = _venv_python(comfy_dir) or _venv_python(comfy_dir.parent)
+    if python:
+        return python
+    for candidate in (comfy_dir.parent / "standalone-env" / "python.exe", comfy_dir.parent / "standalone-env" / "bin" / "python3",
+                      comfy_dir.parent / "standalone-env" / "bin" / "python"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _desktop_environment(env_dir: Path) -> ComfyInstall | None:
+    """An environment of the new Comfy Desktop: <Comfy-Desktop>/ComfyUI-Installs/<Name>/ComfyUI/main.py.
+
+    It is a complete ComfyUI with its own Python, so the studio starts it
+    directly (headless, with Low-VRAM flags) instead of the Desktop window.
+    """
+    comfy_dir = env_dir / "ComfyUI"
+    main_py = comfy_dir / "main.py"
+    if not main_py.exists():
+        return None
+    python = _env_python(comfy_dir)
+    inst = ComfyInstall("manual", comfy_dir, python=python, main_py=main_py, data_dir=comfy_dir)
+    inst.notes.append(f"Comfy Desktop environment '{env_dir.name}' - started directly by Pixel RPG Asset Studio")
+    if python is None:
+        inst.notes.append("The Python environment of this installation is missing or incomplete (was the installation interrupted?). "
+                          "Reinstall it in Comfy Desktop.")
+    return inst
+
+
+def desktop_environment_roots() -> list[Path]:
+    roots = []
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        roots.append(Path(local) / "Comfy-Desktop" / "ComfyUI-Installs")
+    roots.append(Path.home() / "AppData" / "Local" / "Comfy-Desktop" / "ComfyUI-Installs")
+    return list(dict.fromkeys(roots))
+
+
+def find_desktop_environments() -> list[ComfyInstall]:
+    found = []
+    for base in desktop_environment_roots():
+        if base.is_dir():
+            for env in sorted(base.iterdir()):
+                inst = _desktop_environment(env) if env.is_dir() else None
+                if inst:
+                    found.append(inst)
+    return found
+
+
 def detect_install(path: Path | str) -> ComfyInstall | None:
     """Identify the ComfyUI layout in (or around) ``path``."""
     if not path:
         return None
     root = Path(path).expanduser()
     if root.is_file():
-        if root.name.lower() in ("comfyui.exe", "comfyui"):
+        if _is_comfy_executable(root):
             return _desktop_from_exe(root)
         root = root.parent
     if not root.exists():
@@ -115,10 +174,21 @@ def detect_install(path: Path | str) -> ComfyInstall | None:
         if embedded.exists() and main_py.exists():
             return ComfyInstall("portable", portable_root, python=embedded, main_py=main_py, data_dir=portable_root / "ComfyUI")
 
-    # Desktop app folder (contains ComfyUI.exe)
-    exe = root / "ComfyUI.exe"
-    if exe.exists():
-        return _desktop_from_exe(exe)
+    # New Comfy Desktop (checked after Portable, which also has ComfyUI/main.py): environment folder, the ComfyUI-Installs folder, or the app data folder
+    env = _desktop_environment(root)
+    if env:
+        return env
+    for container in (root / "ComfyUI-Installs", root):
+        if container.is_dir() and container.name.lower() == "comfyui-installs":
+            for child in sorted(container.iterdir()):
+                env = _desktop_environment(child) if child.is_dir() else None
+                if env:
+                    return env
+
+    # Desktop app folder (contains ComfyUI.exe / "Comfy Desktop.exe")
+    for exe in sorted(root.glob("*.exe")):
+        if _is_comfy_executable(exe):
+            return _desktop_from_exe(exe)
 
     # Desktop data folder (basePath) selected directly: has models/ but no main.py
     if (root / "models").is_dir() and not (root / "main.py").exists() and (root / ".venv").exists():
@@ -129,10 +199,10 @@ def detect_install(path: Path | str) -> ComfyInstall | None:
             inst.notes.append("ComfyUI Desktop data folder found, but ComfyUI.exe was not found; start it manually.")
         return inst
 
-    # Manual git install
+    # Manual git install (or the ComfyUI folder inside a Comfy Desktop environment)
     main_py = root / "main.py"
-    if main_py.exists() and (root / "comfy").is_dir():
-        python = _venv_python(root) or _venv_python(root.parent)
+    if main_py.exists() and ((root / "comfy").is_dir() or (root / ".venv").is_dir()):
+        python = _env_python(root)
         inst = ComfyInstall("manual", root, python=python, main_py=main_py, data_dir=root)
         if python is None:
             inst.notes.append("No virtual environment (venv/.venv) found next to main.py; configure a Python or start ComfyUI manually.")
@@ -141,6 +211,12 @@ def detect_install(path: Path | str) -> ComfyInstall | None:
 
 
 def _desktop_from_exe(exe: Path) -> ComfyInstall:
+    # New Comfy Desktop: prefer one of its environments - it can be started
+    # headless with our port and Low-VRAM flags instead of the Desktop window.
+    envs = [e for e in find_desktop_environments() if e.can_autostart]
+    if envs:
+        envs[0].notes.append(f"Selected program: {exe.name}")
+        return envs[0]
     base = desktop_config_base_path()
     inst = ComfyInstall("desktop", exe.parent, executable=exe, data_dir=base, default_port=DESKTOP_DEFAULT_PORT)
     if base is None:
@@ -159,6 +235,14 @@ def find_desktop_executable() -> Path | None:
     ):
         if candidate.exists():
             return candidate
+    # Newer installers use other folder/exe names (e.g. "Comfy Desktop.exe")
+    for base in (local / "Programs", local / "Comfy-Desktop", Path(os.environ.get("ProgramFiles", r"C:\Program Files"))):
+        if not base.is_dir():
+            continue
+        for folder in [base] + [d for d in base.iterdir() if d.is_dir() and "comfy" in d.name.lower()]:
+            for exe in sorted(folder.glob("*.exe")):
+                if _is_comfy_executable(exe):
+                    return exe
     return None
 
 
@@ -172,6 +256,9 @@ def find_installations() -> list[ComfyInstall]:
             seen.add(str(inst.root.resolve()))
             found.append(inst)
 
+    # New Comfy Desktop environments first: they can be started headless with our flags.
+    for env in find_desktop_environments():
+        add(env)
     exe = find_desktop_executable()
     if exe:
         add(_desktop_from_exe(exe))
