@@ -6,14 +6,16 @@ users never need to open Blender for normal operation.
 
 Modes
 -----
-``prepare``  import a model, clean it up, normalise scale/orientation, project
-             the concept image as colours, (optionally) build an automatic
-             humanoid rig, compute stable camera framing, save a .blend and a
-             cleaned GLB. The .blend can be opened and corrected manually
-             (rig, weights, shape) - later renders use the corrected file.
-``render``   open the prepared .blend and render frames for the requested
-             directions/animations with a fixed orthographic camera and
-             deterministic "toon" shading (works with Cycles and EEVEE).
+``prepare``  import a model (weapon, item, prop, building...), clean it up,
+             normalise scale/orientation, project the concept image as
+             colours, save a .blend and a cleaned GLB. The .blend can be
+             opened and corrected manually - later renders use that file.
+``render``   open the prepared .blend and render one view per requested
+             direction with a fixed orthographic camera and deterministic
+             "toon" shading (works with Cycles and EEVEE).
+
+Characters do not use Blender (they are generated in 2D from a reference
+image and OpenPose skeletons).
 
 Every run writes a JSON report (``report_path``) with warnings and results.
 Compatible with Blender 3.6 LTS - 5.x (tested with 4.2 LTS and 5.2 LTS).
@@ -28,7 +30,7 @@ import traceback
 
 import bmesh
 import bpy
-from mathutils import Matrix, Quaternion, Vector
+from mathutils import Quaternion, Vector
 
 try:
     import numpy as np
@@ -37,37 +39,7 @@ except ImportError:  # pragma: no cover - Blender always bundles numpy
 
 REPORT = {"ok": False, "warnings": [], "errors": [], "frames": [], "blender_version": bpy.app.version_string}
 
-# Canonical bone names of the procedural humanoid rig.
-HUMANOID_BONES = [
-    "hips", "spine", "chest", "neck", "head",
-    "upper_arm.L", "forearm.L", "hand.L", "upper_arm.R", "forearm.R", "hand.R",
-    "thigh.L", "shin.L", "foot.L", "thigh.R", "shin.R", "foot.R",
-]
-
-# Mapping from common external rig naming schemes to canonical names, so the
-# procedural animations also drive imported (e.g. Mixamo) rigs.
-BONE_ALIASES = {
-    "hips": ["mixamorig:Hips", "Hips", "pelvis", "Pelvis"],
-    "spine": ["mixamorig:Spine", "Spine", "spine_01"],
-    "chest": ["mixamorig:Spine2", "mixamorig:Spine1", "Chest", "spine_03", "spine_02"],
-    "neck": ["mixamorig:Neck", "Neck", "neck_01"],
-    "head": ["mixamorig:Head", "Head"],
-    "upper_arm.L": ["mixamorig:LeftArm", "LeftArm", "upperarm_l", "UpperArm.L"],
-    "forearm.L": ["mixamorig:LeftForeArm", "LeftForeArm", "lowerarm_l"],
-    "hand.L": ["mixamorig:LeftHand", "LeftHand", "hand_l"],
-    "upper_arm.R": ["mixamorig:RightArm", "RightArm", "upperarm_r", "UpperArm.R"],
-    "forearm.R": ["mixamorig:RightForeArm", "RightForeArm", "lowerarm_r"],
-    "hand.R": ["mixamorig:RightHand", "RightHand", "hand_r"],
-    "thigh.L": ["mixamorig:LeftUpLeg", "LeftUpLeg", "thigh_l"],
-    "shin.L": ["mixamorig:LeftLeg", "LeftLeg", "calf_l"],
-    "foot.L": ["mixamorig:LeftFoot", "LeftFoot", "foot_l"],
-    "thigh.R": ["mixamorig:RightUpLeg", "RightUpLeg", "thigh_r"],
-    "shin.R": ["mixamorig:RightLeg", "RightLeg", "calf_r"],
-    "foot.R": ["mixamorig:RightFoot", "RightFoot", "foot_r"],
-}
-
 ROOT_NAME = "StudioRoot"
-RIG_NAME = "StudioRig"
 MODEL_NAME = "StudioModel"
 CAMERA_NAME = "StudioCamera"
 
@@ -401,318 +373,6 @@ def apply_materials(obj, cfg, light_dir):
     return mode
 
 
-# ------------------------------------------------------------------- rig
-def _x_extent_at(co, z, band):
-    sel = co[np.abs(co[:, 2] - z) < band]
-    if len(sel) == 0:
-        return 0.0, 0.0
-    return float(sel[:, 0].min()), float(sel[:, 0].max())
-
-
-def build_humanoid_rig(mesh_obj):
-    """Create a simple humanoid armature from the mesh proportions.
-
-    Assumes a character standing upright (T-pose or A-pose), facing -Y, feet at
-    z=0. Arm positions are estimated from the mesh width profile. This is a
-    heuristic: the report tells the user how well the skinning worked, and
-    the saved .blend can be corrected manually.
-    """
-    co = world_vertices(mesh_obj, evaluated=False)
-    H = float(co[:, 2].max())
-    band = H * 0.03
-    # Find shoulder/arm height = widest slice in the upper body.
-    zs = np.linspace(0.55 * H, 0.9 * H, 71)
-    widths = np.array([(lambda e: e[1] - e[0])(_x_extent_at(co, z, band * 0.5)) for z in zs])
-    best_w = float(widths.max())
-    # centre of the band where the body is (nearly) widest = arm line
-    best_z = float(zs[widths >= 0.97 * best_w].mean())
-    torso_lo, torso_hi = _x_extent_at(co, 0.6 * H, band)
-    torso_half = max(0.08 * H, (torso_hi - torso_lo) / 2)
-    hip_lo, hip_hi = _x_extent_at(co, 0.45 * H, band)
-    hip_half = max(0.06 * H, (hip_hi - hip_lo) / 2)
-    arm_tip_l = max(float(co[:, 0].max()), torso_half * 1.2)
-    arm_tip_r = min(float(co[:, 0].min()), -torso_half * 1.2)
-    t_pose = best_w > 0.65 * H
-    shoulder_z = best_z if t_pose else 0.8 * H
-    sx = torso_half * 0.85
-
-    arm_data = bpy.data.armatures.new(RIG_NAME)
-    rig = bpy.data.objects.new(RIG_NAME, arm_data)
-    bpy.context.scene.collection.objects.link(rig)
-    select_only([rig])
-    bpy.ops.object.mode_set(mode="EDIT")
-    eb = arm_data.edit_bones
-
-    def bone(name, head, tail, parent=None, connect=False):
-        b = eb.new(name)
-        b.head, b.tail = Vector(head), Vector(tail)
-        b.roll = 0.0
-        if parent:
-            b.parent = eb[parent]
-            b.use_connect = connect
-        return b
-
-    bone("hips", (0, 0, 0.48 * H), (0, 0, 0.58 * H))
-    bone("spine", (0, 0, 0.58 * H), (0, 0, 0.68 * H), "hips", True)
-    bone("chest", (0, 0, 0.68 * H), (0, 0, 0.8 * H), "spine", True)
-    bone("neck", (0, 0, 0.8 * H), (0, 0, 0.86 * H), "chest", True)
-    bone("head", (0, 0, 0.86 * H), (0, 0, H), "neck", True)
-    for side, sign, tip in (("L", 1, arm_tip_l), ("R", -1, arm_tip_r)):
-        if t_pose:
-            reach = abs(tip) - sx
-            p0 = (sign * sx, 0, shoulder_z)
-            p1 = (sign * (sx + reach * 0.45), 0, shoulder_z)
-            p2 = (sign * (sx + reach * 0.85), 0, shoulder_z)
-            p3 = (sign * (sx + reach), 0, shoulder_z)
-        else:  # arms down / A-pose: bones go down along the body side
-            ax = max(sx * 1.1, abs(tip) * 0.85)
-            p0 = (sign * sx, 0, shoulder_z)
-            p1 = (sign * ax, 0, shoulder_z - 0.17 * H)
-            p2 = (sign * ax, 0, shoulder_z - 0.32 * H)
-            p3 = (sign * ax, 0, shoulder_z - 0.4 * H)
-        bone("upper_arm." + side, p0, p1, "chest")
-        bone("forearm." + side, p1, p2, "upper_arm." + side, True)
-        bone("hand." + side, p2, p3, "forearm." + side, True)
-        lx = sign * hip_half * 0.55
-        bone("thigh." + side, (lx, 0, 0.48 * H), (lx, 0, 0.27 * H), "hips")
-        bone("shin." + side, (lx, 0, 0.27 * H), (lx, 0, 0.05 * H), "thigh." + side, True)
-        bone("foot." + side, (lx, 0, 0.05 * H), (lx, -0.08 * H, 0.0), "shin." + side, True)
-    bpy.ops.object.mode_set(mode="OBJECT")
-    rig["studio_t_pose"] = bool(t_pose)
-    return rig, {"t_pose": bool(t_pose), "shoulder_height": shoulder_z / H}
-
-
-def unweighted_vertex_count(mesh_obj):
-    count = 0
-    for v in mesh_obj.data.vertices:
-        if not any(g.weight > 1e-4 for g in v.groups):
-            count += 1
-    return count
-
-
-def skin_mesh(mesh_obj, rig):
-    """Automatic (heat) weights; falls back to envelope weights if they fail."""
-    select_only([mesh_obj, rig], rig)
-    method = "automatic"
-    try:
-        bpy.ops.object.parent_set(type="ARMATURE_AUTO")
-    except RuntimeError as exc:
-        warn("Automatic weights failed: %s" % exc)
-    n = len(mesh_obj.data.vertices)
-    missing = unweighted_vertex_count(mesh_obj)
-    if missing > 0.05 * n:
-        warn("Automatic weights left %d of %d vertices unweighted; falling back to envelope weights. "
-             "For best results fix the weights manually in the saved .blend file." % (missing, n))
-        mesh_obj.vertex_groups.clear()
-        for m in [m for m in mesh_obj.modifiers if m.type == "ARMATURE"]:
-            mesh_obj.modifiers.remove(m)
-        select_only([mesh_obj], mesh_obj)
-        bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
-        for b in rig.data.bones:
-            b.envelope_distance = 0.25 * rig.dimensions.z
-            b.head_radius = b.tail_radius = 0.06 * rig.dimensions.z
-        select_only([mesh_obj, rig], rig)
-        bpy.ops.object.parent_set(type="ARMATURE_ENVELOPE")
-        method = "envelope"
-        missing = unweighted_vertex_count(mesh_obj)
-    return {"weights": method, "unweighted_vertices": missing, "vertices": n}
-
-
-def find_armature():
-    arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
-    return arms[0] if arms else None
-
-
-def bone_map(rig):
-    """canonical name -> actual pose bone name present in the rig."""
-    names = {b.name for b in rig.pose.bones}
-    mapping = {}
-    for canonical in HUMANOID_BONES:
-        if canonical in names:
-            mapping[canonical] = canonical
-            continue
-        for alias in BONE_ALIASES.get(canonical, []):
-            if alias in names:
-                mapping[canonical] = alias
-                break
-    return mapping
-
-
-# -------------------------------------------------------------- animation
-def _q(axis, deg):
-    axes = {"X": Vector((1, 0, 0)), "Y": Vector((0, 1, 0)), "Z": Vector((0, 0, 1))}
-    return Quaternion(axes[axis], math.radians(deg))
-
-
-def _arm_rest_angle(rig, mapping, side):
-    """Angle (deg) of the upper arm below horizontal in rest pose."""
-    name = mapping.get("upper_arm." + side)
-    if not name:
-        return 0.0
-    b = rig.data.bones[name]
-    d = (b.tail_local - b.head_local).normalized()
-    return math.degrees(math.asin(max(-1.0, min(1.0, -d.z))))
-
-
-def procedural_pose(anim, p, arm_down):
-    """Return ({bone: armature-space quaternion relative to parent}, root_loc, root_rot_x_deg).
-
-    ``p`` is the animation phase 0..1. ``arm_down`` = degrees needed to bring
-    the arms from rest pose down to the sides.
-    """
-    s = math.sin(2 * math.pi * p)
-    c = math.cos(2 * math.pi * p)
-    R = {}
-    loc = [0.0, 0.0, 0.0]
-    fall = 0.0
-
-    def arms(swing_l=0.0, swing_r=0.0, bend_l=10.0, bend_r=10.0, raise_l=0.0, raise_r=0.0):
-        # Lower arms to the sides (rotation about Y), then swing forward/back (about X).
-        R["upper_arm.L"] = _q("X", -swing_l) @ _q("Y", arm_down - raise_l)
-        R["upper_arm.R"] = _q("X", -swing_r) @ _q("Y", -(arm_down - raise_r))
-        R["forearm.L"] = _q("Z", -bend_l)
-        R["forearm.R"] = _q("Z", bend_r)
-
-    def legs(l=0.0, r=0.0, knee_l=0.0, knee_r=0.0):
-        R["thigh.L"] = _q("X", -l)
-        R["thigh.R"] = _q("X", -r)
-        R["shin.L"] = _q("X", knee_l)
-        R["shin.R"] = _q("X", knee_r)
-
-    if anim == "idle":
-        arms(swing_l=2 * s, swing_r=-2 * s, bend_l=8, bend_r=8)
-        R["chest"] = _q("X", 1.5 * s)
-        R["head"] = _q("X", -1.0 * s)
-        loc[2] = -0.006 * (1 - c)
-    elif anim in ("walk", "run"):
-        amp = 28.0 if anim == "walk" else 42.0
-        lean = 4.0 if anim == "walk" else 12.0
-        legs(amp * s, -amp * s, knee_l=max(0.0, 35 * -c) + 5, knee_r=max(0.0, 35 * c) + 5)
-        arms(swing_l=-amp * 0.8 * s, swing_r=amp * 0.8 * s, bend_l=15 if anim == "walk" else 60, bend_r=15 if anim == "walk" else 60)
-        R["spine"] = _q("X", lean)
-        R["chest"] = _q("Z", 4 * s)
-        loc[2] = -0.02 * abs(c) * (1.0 if anim == "walk" else 2.0)
-    elif anim in ("attack", "heavy_attack"):
-        heavy = anim == "heavy_attack"
-        # wind-up (0..0.4) -> strike (0.4..0.6) -> recover
-        if p < 0.4:
-            k = p / 0.4
-            swing, body = -(110 if heavy else 80) * k, -10 * k
-        elif p < 0.6:
-            k = (p - 0.4) / 0.2
-            swing, body = -(110 if heavy else 80) + (170 if heavy else 140) * k, -10 + 25 * k
-        else:
-            k = (p - 0.6) / 0.4
-            swing, body = (60 if heavy else 60) * (1 - k), 15 * (1 - k)
-        arms(swing_l=swing * (1.0 if heavy else 0.2), swing_r=swing, bend_l=20, bend_r=25, raise_l=0, raise_r=0)
-        R["spine"] = _q("X", body * 0.6) @ _q("Z", -body * (0.2 if heavy else 0.8))
-        legs(-15, 15, 10, 10)
-        loc[2] = -0.03 if heavy and 0.4 < p < 0.7 else 0.0
-    elif anim == "hit":
-        k = math.sin(math.pi * min(1.0, p * 1.4))
-        R["spine"] = _q("X", -18 * k)
-        R["head"] = _q("X", -12 * k)
-        arms(swing_l=-20 * k, swing_r=-20 * k, bend_l=30, bend_r=30, raise_l=15 * k, raise_r=15 * k)
-        loc[1] = 0.05 * k
-    elif anim == "death":
-        k = min(1.0, p * 1.2)
-        fall = -88.0 * (k * k)
-        R["spine"] = _q("X", -10 * k)
-        R["head"] = _q("X", -20 * k)
-        arms(swing_l=-40 * k, swing_r=-30 * k, bend_l=20, bend_r=20, raise_l=40 * k, raise_r=35 * k)
-        legs(10 * k, -5 * k, 15 * k, 5 * k)
-        loc[2] = -0.02 * k
-    elif anim == "block":
-        k = min(1.0, p * 2.0)
-        arms(swing_l=70 * k, swing_r=60 * k, bend_l=80 * k, bend_r=90 * k)
-        R["spine"] = _q("X", 6 * k)
-        legs(-10 * k, 12 * k, 15 * k, 10 * k)
-        loc[2] = -0.03 * k
-    elif anim in ("skill", "cast"):
-        k = math.sin(math.pi * p)
-        if anim == "cast":
-            arms(swing_l=90 * k, swing_r=90 * k, bend_l=10, bend_r=10, raise_l=20 * k, raise_r=20 * k)
-            R["chest"] = _q("X", -8 * k)
-        else:
-            arms(swing_l=20 * k, swing_r=150 * k, bend_l=20, bend_r=10)
-            R["spine"] = _q("Z", -15 * k)
-        R["head"] = _q("X", -6 * k)
-    elif anim == "dodge":
-        k = math.sin(math.pi * p)
-        loc[0] = -0.2 * k
-        loc[2] = -0.1 * k
-        R["spine"] = _q("X", 25 * k) @ _q("Y", -10 * k)
-        legs(-40 * k, 30 * k, 60 * k, 70 * k)
-        arms(swing_l=30 * k, swing_r=-20 * k, bend_l=40, bend_r=40)
-    else:
-        arms()
-    return R, loc, fall
-
-
-def apply_pose(rig, mapping, rotations):
-    """Apply armature-space (relative-to-parent) rotations to pose bones."""
-    for pb in rig.pose.bones:
-        pb.rotation_mode = "QUATERNION"
-        pb.rotation_quaternion = Quaternion()
-        pb.location = Vector((0, 0, 0))
-    for canonical, rot in rotations.items():
-        name = mapping.get(canonical)
-        if not name:
-            continue
-        pb = rig.pose.bones[name]
-        m = pb.bone.matrix_local.to_quaternion()
-        pb.rotation_quaternion = m.inverted() @ rot @ m
-
-
-def action_for(rig, anim):
-    """An imported action matching the animation name, if any."""
-    want = anim.lower().replace("_", "")
-    for act in bpy.data.actions:
-        if want in act.name.lower().replace("_", "").replace(" ", ""):
-            return act
-    return None
-
-
-def set_frame_pose(ctx, anim, frame_index, frame_count, loop):
-    """Pose the character for one frame. Returns the method used."""
-    rig = ctx.get("rig")
-    root = ctx["root"]
-    holder = ctx["holder"]
-    p = frame_index / frame_count if loop else (frame_index / max(1, frame_count - 1))
-    set_holder_offset(holder, (0.0, 0.0, 0.0), 0.0)
-    if rig is None:
-        return "static"
-    if anim in (None, "", "static"):
-        if rig.animation_data:
-            rig.animation_data.action = None
-        apply_pose(rig, ctx["mapping"], {})
-        return "static"
-    act = action_for(rig, anim) if ctx.get("use_actions", True) else None
-    if act is not None:
-        if rig.animation_data is None:
-            rig.animation_data_create()
-        rig.animation_data.action = act
-        start, end = act.frame_range
-        frame = start + (end - start) * p
-        bpy.context.scene.frame_set(int(math.floor(frame)), subframe=frame - math.floor(frame))
-        return "action:" + act.name
-    if rig.animation_data:
-        rig.animation_data.action = None
-    rotations, loc, fall = procedural_pose(anim, p, ctx["arm_down"])
-    apply_pose(rig, ctx["mapping"], rotations)
-    H = ctx["height"]
-    set_holder_offset(holder, (loc[0] * H, loc[1] * H, loc[2] * H), fall)
-    return "procedural"
-
-
-def set_holder_offset(holder, offset, fall_deg):
-    """Animate the character holder relative to its stored base transform."""
-    base = holder.get("studio_base_matrix")
-    base_m = Matrix([base[0:4], base[4:8], base[8:12], base[12:16]]) if base else Matrix.Identity(4)
-    fall = Matrix.Rotation(math.radians(fall_deg), 4, "X")
-    holder.matrix_basis = Matrix.Translation(Vector(offset)) @ fall @ base_m
-
-
 # --------------------------------------------------------------- camera
 def setup_camera(cfg, target):
     cam_data = bpy.data.cameras.get(CAMERA_NAME) or bpy.data.cameras.new(CAMERA_NAME)
@@ -764,26 +424,12 @@ def rotate_points_z(points, deg):
     return points @ rot.T
 
 
-def framing_points(ctx, animations):
-    """Mesh vertices over sampled poses of all animations (subsampled)."""
-    mesh = ctx["mesh"]
-    pts = []
-    # With a rig, the rest (T-)pose is never shown, so it must not influence framing.
-    samples = [] if (ctx.get("rig") is not None and animations) else [("static", 0, 1, True)]
-    for a in animations:
-        n = 4
-        for i in range(n):
-            samples.append((a, i, n, False))
-    for anim, i, n, loop in samples:
-        set_frame_pose(ctx, anim, i, n, loop)
-        bpy.context.view_layer.update()
-        co = world_vertices(mesh)
-        step = max(1, len(co) // 3000)
-        pts.append(co[::step])
-    set_frame_pose(ctx, "static", 0, 1, True)
-    allp = np.concatenate(pts)
-    # all 8 directions (model yaw)
-    return np.concatenate([rotate_points_z(allp, -d) for d in range(0, 360, 45)])
+def framing_points(mesh):
+    """Mesh vertices (subsampled), rotated to all 8 directions, so the framing
+    is identical for every view."""
+    co = world_vertices(mesh)
+    pts = co[::max(1, len(co) // 3000)]
+    return np.concatenate([rotate_points_z(pts, -d) for d in range(0, 360, 45)])
 
 
 # ---------------------------------------------------------------- render
@@ -829,94 +475,37 @@ def setup_render(cfg):
 
 
 # ------------------------------------------------------------------ modes
-def setup_hierarchy(mesh_obj, rig):
-    """StudioRoot (direction yaw) -> holder/rig (animation offsets) -> mesh."""
+def setup_hierarchy(mesh_obj):
+    """StudioRoot (direction yaw) -> mesh."""
     root = bpy.data.objects.new(ROOT_NAME, None)
     bpy.context.scene.collection.objects.link(root)
-    holder = rig
-    if rig is None:
-        holder = bpy.data.objects.new("StudioHolder", None)
-        bpy.context.scene.collection.objects.link(holder)
-        mesh_obj.parent = holder
-    # Every other top-level object (e.g. an imported rig's meshes) follows the holder.
-    for o in list(bpy.context.scene.objects):
-        if o.parent is None and o not in (root, holder) and o.type in ("MESH", "ARMATURE", "EMPTY"):
-            mw = o.matrix_world.copy()
-            o.parent = holder
-            o.matrix_parent_inverse = holder.matrix_world.inverted()
-            o.matrix_world = mw
-    holder.parent = root
-    holder["studio_base_matrix"] = [v for row in holder.matrix_basis for v in row]
-    return root, holder
+    mesh_obj.parent = root
+    return root
 
 
 def run_prepare(job):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     imported = import_model(job["model_path"])
     cfg = job.get("cleanup", {})
-    existing_rig = next((o for o in imported if o.type == "ARMATURE"), None)
-    rig_cfg = job.get("rig", {"mode": "none"})
-    rig_mode = rig_cfg.get("mode", "none")
     result = {}
-    if existing_rig is not None and rig_mode in ("auto_humanoid", "existing"):
-        info("Using the rig contained in the imported model")
-        mesh_obj = next(o for o in imported if o.type == "MESH")
-        rig = existing_rig
-        # Normalise via the rig object (keeps skinning intact)
-        co = np.concatenate([world_vertices(o) for o in imported if o.type == "MESH"])
-        H = float(co[:, 2].max() - co[:, 2].min())
-        s = float(cfg.get("target_size", 2.0)) / max(1e-9, H)
-        top = [o for o in imported if o.parent is None]
-        for o in top:
-            o.scale = (o.scale[0] * s, o.scale[1] * s, o.scale[2] * s)
-        bpy.context.view_layer.update()
-        co = np.concatenate([world_vertices(o) for o in imported if o.type == "MESH"])
-        mn, mx = co.min(axis=0), co.max(axis=0)
-        for o in top:
-            o.location = (o.location[0] - (mn[0] + mx[0]) / 2, o.location[1] - (mn[1] + mx[1]) / 2, o.location[2] - mn[2])
-        bpy.context.view_layer.update()
-        result["rig"] = {"mode": "existing", "bones": len(rig.data.bones), "actions": [a.name for a in bpy.data.actions]}
-        mapping = bone_map(rig)
-        result["rig"]["mapped_bones"] = len(mapping)
-        if len(mapping) < 10:
-            warn("The imported rig uses unknown bone names (%d of %d mapped); procedural animations may not move it. "
-                 "Animations contained in the file are used when their names match." % (len(mapping), len(HUMANOID_BONES)))
-        light_dir = light_vector(*job.get("light", {}).get("direction", (-45.0, 50.0)))
-        for m in [o for o in imported if o.type == "MESH"]:
-            apply_materials(m, dict(job, texture={"mode": "keep"}), light_dir)
-        mesh_obj.name = MODEL_NAME
-        result["mesh"] = {"dimensions": [float(v) for v in (mx - mn)]}
-    else:
-        if existing_rig is not None:
-            warn("The model contains an armature but rigging is disabled; the armature is ignored.")
-            for o in imported:
-                if o.type == "ARMATURE":
-                    bpy.data.objects.remove(o)
-        mesh_obj = join_meshes([o for o in imported if o.type == "MESH" and o.name in bpy.data.objects])
-        apply_transforms(mesh_obj)  # bake parent transforms before removing helper objects
-        for o in list(bpy.data.objects):
-            if o != mesh_obj:
-                bpy.data.objects.remove(o)
-        mesh_obj.name = MODEL_NAME
-        stats = cleanup_mesh(mesh_obj, cfg)
-        stats.update(normalize(mesh_obj, cfg))
-        result["mesh"] = stats
-        light_dir = light_vector(*job.get("light", {}).get("direction", (-45.0, 50.0)))
-        result["texture_mode"] = apply_materials(mesh_obj, job, light_dir)
-        rig = None
-        if rig_mode == "auto_humanoid":
-            rig, rig_info = build_humanoid_rig(mesh_obj)
-            rig_info.update(skin_mesh(mesh_obj, rig))
-            rig_info["mode"] = "auto_humanoid"
-            rig_info["bones"] = len(rig.data.bones)
-            result["rig"] = rig_info
-        else:
-            result["rig"] = {"mode": "none"}
-    root, holder = setup_hierarchy(mesh_obj, rig)
+    meshes = [o for o in imported if o.type == "MESH"]
+    if any(o.type == "ARMATURE" for o in imported):
+        warn("The model contains an armature; it is ignored (objects are rendered static).")
+    mesh_obj = join_meshes(meshes)
+    apply_transforms(mesh_obj)  # bake parent transforms before removing helper objects
+    for o in list(bpy.data.objects):
+        if o != mesh_obj:
+            bpy.data.objects.remove(o)
+    mesh_obj.name = MODEL_NAME
+    stats = cleanup_mesh(mesh_obj, cfg)
+    stats.update(normalize(mesh_obj, cfg))
+    result["mesh"] = stats
+    light_dir = light_vector(*job.get("light", {}).get("direction", (-45.0, 50.0)))
+    result["texture_mode"] = apply_materials(mesh_obj, job, light_dir)
+    setup_hierarchy(mesh_obj)
     scene = bpy.context.scene
     H = float(world_vertices(mesh_obj)[:, 2].max())
     scene["studio_height"] = H
-    scene["studio_rig_mode"] = result["rig"]["mode"]
     result["height"] = H
 
     # Export a cleaned model (static GLB) and save the editable .blend
@@ -940,17 +529,7 @@ def run_render(job):
     root = bpy.data.objects.get(ROOT_NAME)
     if mesh is None or root is None:
         raise RuntimeError("The .blend file was not prepared by Pixel RPG Asset Studio (missing %s/%s)." % (MODEL_NAME, ROOT_NAME))
-    rig = find_armature()
-    holder = rig if rig is not None else bpy.data.objects.get("StudioHolder")
     H = float(scene.get("studio_height", 2.0))
-    mapping = bone_map(rig) if rig else {}
-    arm_down = 0.0
-    if rig:
-        rest = (_arm_rest_angle(rig, mapping, "L") + _arm_rest_angle(rig, mapping, "R")) / 2
-        arm_down = max(0.0, 78.0 - rest)
-    ctx = {"rig": rig, "root": root, "holder": holder, "mesh": mesh, "height": H, "mapping": mapping,
-           "arm_down": arm_down, "use_actions": job.get("use_actions", True)}
-
     # Re-apply light direction (style may have changed since prepare). The
     # light is rotated with the camera's perspective yaw so it stays fixed on screen.
     if job.get("light"):
@@ -968,14 +547,12 @@ def run_render(job):
     cam = setup_camera(cam_cfg, target)
     r = job.get("render", {})
     width, height = int(r.get("width", 256)), int(r.get("height", 256))
-    animations = [a["name"] for a in job.get("animations", []) if a.get("name") not in (None, "", "static")]
     if cam_cfg.get("ortho_scale") and cam_cfg.get("target"):
         ortho = float(cam_cfg["ortho_scale"])
     else:
-        # Stable framing: computed once over ALL animations/directions of the
-        # character, stored by the app and reused for every later render.
-        frame_anims = job.get("framing_animations") or animations
-        pts = framing_points(ctx, frame_anims)
+        # Stable framing: computed once over all directions, stored by the app
+        # and reused for every later render.
+        pts = framing_points(mesh)
         ortho, target = compute_framing(cam, pts, target, width, height, float(cam_cfg.get("margin", 1.06)))
         cam = setup_camera(cam_cfg, target)
     cam.data.ortho_scale = ortho
@@ -989,22 +566,17 @@ def run_render(job):
     for spec in anim_specs:
         name = spec.get("name") or "static"
         count = max(1, int(spec.get("frames", 1)))
-        loop = bool(spec.get("loop", True))
         for d in job.get("directions", [{"key": "s", "yaw_deg": 0.0}]):
             for i in range(count):
                 if only_set is not None and (name, d["key"], i) not in only_set:
                     continue
-                method = set_frame_pose(ctx, name, i, count, loop)
                 root.rotation_euler = (0, 0, math.radians(-float(d["yaw_deg"])))
                 bpy.context.view_layer.update()
                 path = os.path.join(out_dir, name, d["key"], "frame_%03d.png" % i)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 scene.render.filepath = path
                 bpy.ops.render.render(write_still=True)
-                REPORT["frames"].append({"animation": name, "direction": d["key"], "frame": i, "path": path, "method": method})
-                if job.get("keyframes") and rig is not None and method == "procedural":
-                    for pb in rig.pose.bones:
-                        pb.keyframe_insert("rotation_quaternion", frame=i + 1)
+                REPORT["frames"].append({"animation": name, "direction": d["key"], "frame": i, "path": path})
     if job.get("save_blend"):
         bpy.ops.wm.save_mainfile()
 

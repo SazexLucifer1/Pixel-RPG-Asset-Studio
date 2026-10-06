@@ -65,6 +65,13 @@ class ComfyUIImageProvider(_ComfyBase, ImageGenerationProvider):
                 raise GenerationError(f"Workflow '{template.name}' does not accept a reference image.")
             progress(None, "Uploading reference image to ComfyUI")
             params["init_image"] = self.client.upload_image(request.reference_image)
+        for key, path in request.images.items():
+            binding = template.parameters.get(key)
+            if binding is None or binding.type != "image":
+                raise GenerationError(f"Workflow '{template.name}' has no image input '{key}'.",
+                                      hint="The workflow file does not match this version of the application.")
+            progress(None, f"Uploading {key.replace('_', ' ')} to ComfyUI")
+            params[key] = self.client.upload_image(path, upload_name=f"{key}{Path(path).suffix or '.png'}")
         params = {k: v for k, v in params.items() if k in template.parameters}
         graph = template.build(params, self.model_roles, profile=self.profile)
         started = time.time()

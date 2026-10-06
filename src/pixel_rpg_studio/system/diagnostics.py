@@ -203,6 +203,20 @@ def check_comfyui(settings: AppSettings, client=None) -> list[CheckResult]:
     return results
 
 
+def custom_node_packs(node_types: list[str]) -> list[dict]:
+    """Custom node packs (from the model catalog) that provide the given node types."""
+    import json
+
+    from pixel_rpg_studio.core import paths
+
+    try:
+        data = json.loads((paths.bundled_config_dir() / "models_catalog.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    wanted = set(node_types)
+    return [p for p in data.get("custom_nodes", []) if wanted & set(p.get("provides", []))]
+
+
 def check_workflows(settings: AppSettings, library=None, client=None, server_up: bool = False) -> list[CheckResult]:
     from pixel_rpg_studio.comfyui.workflows import WorkflowLibrary
 
@@ -229,7 +243,13 @@ def check_workflows(settings: AppSettings, library=None, client=None, server_up:
         else:
             hint_parts = []
             if rep.missing_node_types:
-                hint_parts.append("Update ComfyUI or install the custom nodes providing: " + ", ".join(rep.missing_node_types))
+                packs = custom_node_packs(rep.missing_node_types)
+                for pack in packs:
+                    hint_parts.append(f"Install the custom node pack {pack['name']} ({pack['page']}): {pack['install']}")
+                known = {n for pack in packs for n in pack["provides"]}
+                rest = [n for n in rep.missing_node_types if n not in known]
+                if rest:
+                    hint_parts.append("Update ComfyUI or install the custom nodes providing: " + ", ".join(rest))
             if rep.missing_models:
                 hint_parts.append("Install the missing models (AI Models page) or select installed alternatives.")
             results.append(CheckResult("Workflows", wf.title, MISSING if not rep.errors else ERROR, rep.summary(),

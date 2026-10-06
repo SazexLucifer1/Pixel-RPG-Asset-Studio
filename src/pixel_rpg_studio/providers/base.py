@@ -34,14 +34,16 @@ class ProviderStatus:
 
 @dataclass
 class ImageRequest:
-    workflow: str  # logical workflow name, e.g. "character_concept"
+    workflow: str  # logical workflow name, e.g. "character_frame"
     prompt: str
     negative_prompt: str = ""
     seed: int = 0
     width: int | None = None
     height: int | None = None
-    reference_image: Path | None = None  # img2img / reference guidance
+    reference_image: Path | None = None  # img2img / reference guidance (workflow parameter "init_image")
     params: dict[str, Any] = field(default_factory=dict)
+    # Further input images by workflow parameter name, e.g. {"reference_image": ..., "pose_image": ...}
+    images: dict[str, Path] = field(default_factory=dict)
     count: int = 1
 
 
@@ -61,7 +63,7 @@ class ImageResult:
 class ThreeDRequest:
     image: Path  # concept image (background removed)
     seed: int = 0
-    asset_kind: str = "generic"  # "character", "weapon", "building"...
+    asset_kind: str = "generic"  # "weapon", "item", "building"...
     params: dict[str, Any] = field(default_factory=dict)
 
 
@@ -82,7 +84,6 @@ class PrepareRequest:
     blend_path: Path
     export_model_path: Path | None
     texture_image: Path | None
-    rig_mode: str  # "auto_humanoid" | "existing" | "none"
     shading_style: str = "cel"
     shading_bands: int = 3
     light: tuple[float, float] = (-45.0, 50.0)
@@ -121,7 +122,6 @@ class RenderRequest:
     light: tuple[float, float] = (-45.0, 50.0)
     ortho_scale: float | None = None
     target: list[float] | None = None
-    framing_animations: list[str] = field(default_factory=list)
     only_frames: list[tuple[str, str, int]] | None = None  # (animation, direction, frame)
     margin: float = 1.06
 
@@ -176,20 +176,6 @@ class RendererProvider(Provider):
     @abstractmethod
     def render(self, request: RenderRequest, progress: ProgressFn = _noop_progress,
                cancelled: CancelledFn = _never) -> RenderResult: ...
-
-
-class AnimationProvider(Provider):
-    """Describes how animations are produced (procedural rig, imported actions...).
-
-    The current implementations animate inside the renderer's prepared scene;
-    this interface exposes capabilities so UI and pipelines can explain them.
-    """
-
-    @abstractmethod
-    def supported_animations(self) -> list[str]: ...
-
-    @abstractmethod
-    def rig_mode(self) -> str: ...
 
 
 class ImageProcessingProvider(Provider):

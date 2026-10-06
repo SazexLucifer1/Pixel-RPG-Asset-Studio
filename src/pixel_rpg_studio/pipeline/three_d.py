@@ -1,18 +1,12 @@
-"""3D → pixel-art pipeline shared by characters, weapons, items, props,
-environment objects and buildings.
+"""3D → pixel-art pipeline for weapons, items, props, environment objects
+and buildings (characters use the 2D reference pipeline in ``character.py``).
 
 Stages (each is resumable and recorded in asset.json):
 
-    concept image ──► master reference (pixel)        [characters]
-          │
-          ├─► 3D model (AI image-to-3D, or imported) ─► Blender prepare
-          │        (cleanup, scale, colour projection, auto rig)
-          ▼
-    render frames (fixed ortho camera, toon shading) ─► pixel processing
-          ─► final frames / views ─► sprite sheet ─► Godot export
-
-Regenerating a single frame re-renders only that frame from the same
-prepared scene with the stored camera framing, so it matches the others.
+    concept image ─► 3D model (AI image-to-3D, or imported) ─► Blender prepare
+          (cleanup, scale, colour projection)
+    ─► render views (fixed ortho camera, toon shading) ─► pixel processing
+    ─► final views ─► Godot export
 """
 
 from __future__ import annotations
@@ -27,34 +21,21 @@ from PIL import Image
 from pixel_rpg_studio.core.errors import GenerationError, StudioError
 from pixel_rpg_studio.export.godot import VIEW_PREFIX
 from pixel_rpg_studio.imaging import pixel
-from pixel_rpg_studio.imaging.compare import compare_to_master
 from pixel_rpg_studio.pipeline.common import (
     PipelineContext,
     Progress,
     palette_for,
-    process_image,
     projection_texture,
     resolve_seed,
     save_palette,
     threed_input_image,
 )
-from pixel_rpg_studio.project.asset import (
-    ROLE_FINAL,
-    ROLE_GENERATED,
-    ROLE_MASTER,
-    ROLE_MODEL,
-    ROLE_MODEL_RAW,
-    ROLE_ORIGINAL,
-    AnimationInfo,
-    Asset,
-    GenerationRecord,
-)
-from pixel_rpg_studio.project.asset_types import ANIMATION_DEFAULTS, ANIMATIONS, DIRECTIONS, get_asset_type
+from pixel_rpg_studio.project.asset import ROLE_FINAL, ROLE_GENERATED, ROLE_MODEL, ROLE_MODEL_RAW, ROLE_ORIGINAL, Asset, GenerationRecord
+from pixel_rpg_studio.project.asset_types import DIRECTIONS, get_asset_type
 from pixel_rpg_studio.providers.base import AnimationSpec, PrepareRequest, RenderRequest, ThreeDRequest
 
 MODEL_EXTENSIONS = (".glb", ".gltf", ".obj", ".fbx", ".stl", ".ply")
 STATIC = "static"
-UPRIGHT_ANIMATIONS = ("idle", "walk", "run", "block", "cast")
 
 
 def default_settings(asset: Asset, style) -> dict[str, Any]:
@@ -65,11 +46,7 @@ def default_settings(asset: Asset, style) -> dict[str, Any]:
         "sprite_height": style.sprite_height if t.key != "building" else style.sprite_height * 2,
         "facing_correction_deg": 0.0,
         "texture_mode": "project",
-        "rig_mode": "auto_humanoid" if t.animated and t.key == "character" else "none",
-        "framing": "all_animations" if t.key == "character" else "views",
     }
-    if t.key == "character":
-        s["animations"] = {a: dict(ANIMATION_DEFAULTS[a]) for a in ("idle", "walk")}
     return s
 
 
@@ -78,21 +55,6 @@ def settings(asset: Asset, style) -> dict[str, Any]:
     merged.update(asset.meta.settings)
     asset.meta.settings = merged
     return merged
-
-
-# ------------------------------------------------------------- master ref
-def make_master_reference(ctx: PipelineContext, asset: Asset, source: Path | None = None) -> Path:
-    """Pixel-process the concept into the master reference used for comparisons."""
-    s = settings(asset, ctx.style)
-    source = Path(source) if source else asset.output_path(ROLE_GENERATED)
-    if source is None:
-        raise GenerationError("Generate or import a concept image first.")
-    out = asset.path("master_reference.png")
-    process_image(ctx, asset, source, width=s["sprite_width"], height=s["sprite_height"], source_kind="concept",
-                  anchor="bottom", out_path=out, role=None, target="master_reference")
-    asset.set_output(ROLE_MASTER, out)
-    asset.save()
-    return out
 
 
 # ------------------------------------------------------------------ model
@@ -158,16 +120,16 @@ def prepare_model(ctx: PipelineContext, asset: Asset, progress: Progress) -> dic
     clean = asset.path("model", f"{asset.id}_clean.glb")
     style = ctx.style
     req = PrepareRequest(
-        model_path=raw, blend_path=blend, export_model_path=clean, texture_image=texture, rig_mode=s["rig_mode"],
+        model_path=raw, blend_path=blend, export_model_path=clean, texture_image=texture,
         shading_style=style.shading_style, shading_bands=style.shading_bands, light=style.light(),
         facing_correction_deg=float(s.get("facing_correction_deg", 0.0)),
-        scale_mode="height" if asset.type == "character" else "max", texture_mode=s["texture_mode"], concept_image=concept,
+        scale_mode="max", texture_mode=s["texture_mode"], concept_image=concept,
     )
     started = time.time()
     result = ctx.providers.renderer.prepare(req, progress=progress.progress, cancelled=lambda: progress.cancelled)
     s["blend"] = asset.rel(result.blend_path)
     s.pop("camera_framing", None)
-    s["prepare_report"] = {k: v for k, v in result.report.items() if k in ("rig", "mesh", "warnings", "texture_mode", "height")}
+    s["prepare_report"] = {k: v for k, v in result.report.items() if k in ("mesh", "warnings", "texture_mode", "height")}
     asset.add_generation(GenerationRecord(stage="prepare", provider=result.provider, params={"request": _jsonable(req.__dict__)},
                                           outputs=[s["blend"]], duration_s=round(time.time() - started, 2),
                                           notes="; ".join(result.report.get("warnings", []))))
@@ -182,47 +144,26 @@ def _jsonable(d: dict) -> dict:
 
 
 # ----------------------------------------------------------------- render
-def animation_specs(asset: Asset, names: list[str] | None = None) -> list[AnimationSpec]:
-    s = asset.meta.settings
-    anims = s.get("animations") or {}
-    if not anims:
-        return [AnimationSpec(STATIC, 1, True)]
-    out = []
-    for name in names or list(anims):
-        cfg = anims.get(name) or ANIMATION_DEFAULTS.get(name, {"frames": 4, "loop": True})
-        out.append(AnimationSpec(name, int(cfg.get("frames", 4)), bool(cfg.get("loop", True))))
-    return out
-
-
-def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animations: list[str] | None = None,
-                  directions: list[str] | None = None, only_frames: list[tuple[str, str, int]] | None = None) -> dict:
-    """Render (and pixel-process) frames. Returns {(anim, dir): [final paths]}."""
+def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, directions: list[str] | None = None) -> dict:
+    """Render (and pixel-process) one view per direction. Returns {direction: final path}."""
     s = settings(asset, ctx.style)
     blend_rel = s.get("blend")
     if not blend_rel or not (asset.root / blend_rel).exists():
         raise GenerationError("The 3D model has not been prepared yet.", hint="Run 'Prepare model' first.")
     style = ctx.style
     dirs = directions or s["directions"]
-    specs = animation_specs(asset, animations)
     framing = s.get("camera_framing") or {}
     scale = style.render_scale
     W, H = int(s["sprite_width"]), int(s["sprite_height"])
-    if s.get("framing") == "all_animations":
-        framing_anims = list(ANIMATIONS)
-    elif s.get("framing") == "selected_animations":
-        framing_anims = list((s.get("animations") or {}).keys())
-    else:
-        framing_anims = []
     elevation = float(s["elevation_deg"]) if s.get("elevation_deg") is not None else style.elevation()
     yaw_offset = float(s["camera_yaw_deg"]) if s.get("camera_yaw_deg") is not None else style.perspective_yaw()
-    key = {"elevation": elevation, "yaw": yaw_offset, "w": W, "h": H, "scale": scale, "anims": framing_anims}
+    key = {"elevation": elevation, "yaw": yaw_offset, "w": W, "h": H, "scale": scale}
     reuse = framing.get("key") == key
     req = RenderRequest(
         blend_path=asset.root / blend_rel, output_dir=asset.path("render"), width=W * scale, height=H * scale,
-        directions=[(d, DIRECTIONS[d].yaw_deg) for d in dirs], animations=specs, elevation_deg=elevation,
-        yaw_offset_deg=yaw_offset, light=style.light(),
+        directions=[(d, DIRECTIONS[d].yaw_deg) for d in dirs], animations=[AnimationSpec(STATIC, 1, True)],
+        elevation_deg=elevation, yaw_offset_deg=yaw_offset, light=style.light(),
         ortho_scale=framing.get("ortho_scale") if reuse else None, target=framing.get("target") if reuse else None,
-        framing_animations=framing_anims, only_frames=only_frames,
     )
     started = time.time()
     render_progress = progress.sub(0.0, 0.8) if hasattr(progress, "sub") else progress
@@ -232,8 +173,7 @@ def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animat
         stage="render", provider=result.provider,
         params={"camera": {"elevation": elevation, "yaw_offset": yaw_offset, "ortho_scale": result.ortho_scale,
                            "target": result.target}, "light": list(style.light()), "resolution": [req.width, req.height],
-                "animations": [a.__dict__ for a in specs], "directions": dirs},
-        target=";".join(f"{a}/{d}/{f}" for a, d, f in only_frames) if only_frames else "",
+                "directions": dirs},
         outputs=[], duration_s=round(time.time() - started, 2), notes="; ".join(result.report.get("warnings", [])),
     ))
 
@@ -243,89 +183,26 @@ def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animat
         save_palette(asset, pixel.extract_palette(sample[:64], style.max_colors), f"{asset.name} palette")
 
     steps = pixel.steps_from_style(style, palette_for(ctx.project, asset), W, H, source="render")
-    master_path = asset.output_path(ROLE_MASTER)
-    master = Image.open(master_path) if master_path else None
-    size_ref_path = asset.output_path("render_reference")
-    size_ref = Image.open(size_ref_path) if size_ref_path else None
-    finals: dict[tuple[str, str], list[Path]] = {}
+    finals: dict[str, Path] = {}
     total = sum(len(v) for v in result.frames.values())
     done = 0
-    consistency = s.setdefault("consistency", {})
-    for (anim, direction), frames in result.frames.items():
+    for (_anim, direction), frames in result.frames.items():
         for idx, raw_src in sorted(frames.items()):
-            raw = asset.path("animations", anim, direction, "raw", f"frame_{idx:03d}.png")
-            final = asset.path("animations", anim, direction, "final", f"frame_{idx:03d}.png")
+            raw = asset.path("views", direction, "raw.png")
+            final = asset.path("views", direction, "final.png")
             raw.parent.mkdir(parents=True, exist_ok=True)
-            final.parent.mkdir(parents=True, exist_ok=True)
             if Path(raw_src).resolve() != raw.resolve():
                 shutil.copyfile(raw_src, raw)
             ctx.providers.processing.process(raw, steps, final)
-            finals.setdefault((anim, direction), []).append(final)
-            if anim != STATIC and size_ref is None and direction == dirs[0] and idx == 0:
-                # First rendered front frame becomes the size reference for all later frames.
-                ref = asset.path("render_reference.png")
-                shutil.copyfile(final, ref)
-                asset.set_output("render_reference", ref)
-                size_ref = Image.open(ref)
-            if master is not None and anim != STATIC:
-                # Size is only comparable for upright poses (death/dodge/... change the silhouette on purpose).
-                ref_for_size = size_ref if anim in UPRIGHT_ANIMATIONS else None
-                consistency[f"{anim}/{direction}/{idx}"] = compare_to_master(master, Image.open(final), ref_for_size).summary()
+            finals[direction] = final
+            asset.meta.outputs[VIEW_PREFIX + direction] = asset.rel(final)
             done += 1
             progress.progress(0.8 + 0.2 * done / max(1, total), f"Pixel processing {done}/{total}")
+    if dirs and dirs[0] in finals:
+        asset.set_output(ROLE_FINAL, finals[dirs[0]])
     asset.add_generation(GenerationRecord(stage="pixel_process", provider=ctx.providers.processing.id, params={"steps": steps},
-                                          target="render_frames", outputs=[asset.rel(p) for ps in finals.values() for p in ps][:200]))
-    _update_animation_info(asset, specs, dirs)
+                                          target="render_views", outputs=[asset.rel(p) for p in finals.values()]))
     shutil.rmtree(asset.path("render"), ignore_errors=True)
     asset.meta.status = "review"
     asset.save()
     return finals
-
-
-def _update_animation_info(asset: Asset, specs: list[AnimationSpec], dirs: list[str]) -> None:
-    anims_cfg = asset.meta.settings.get("animations") or {}
-    for spec in specs:
-        info = asset.meta.animations.get(spec.name) or AnimationInfo(
-            spec.name, spec.frames, int(anims_cfg.get(spec.name, {}).get("fps", 10)), spec.loop, directions=[])
-        info.frames = spec.frames
-        info.loop = spec.loop
-        info.fps = int(anims_cfg.get(spec.name, {}).get("fps", info.fps))
-        for d in dirs:
-            if d not in info.directions:
-                info.directions.append(d)
-        for d in info.directions:
-            finals = [asset.path("animations", spec.name, d, "final", f"frame_{i:03d}.png") for i in range(spec.frames)]
-            raws = [asset.path("animations", spec.name, d, "raw", f"frame_{i:03d}.png") for i in range(spec.frames)]
-            info.final_frames[d] = [asset.rel(p) for p in finals if p.exists()]
-            info.raw_frames[d] = [asset.rel(p) for p in raws if p.exists()]
-        asset.meta.animations[spec.name] = info
-        if spec.name == STATIC:
-            for d in info.directions:
-                if info.final_frames.get(d):
-                    asset.meta.outputs[VIEW_PREFIX + d] = info.final_frames[d][0]
-            first = info.final_frames.get(info.directions[0]) if info.directions else None
-            if first:
-                asset.meta.outputs[ROLE_FINAL] = first[0]
-
-
-def regenerate_frame(ctx: PipelineContext, asset: Asset, progress: Progress, animation: str, direction: str, frame: int) -> Path:
-    """Re-render exactly one frame with the stored scene, camera and settings."""
-    info = asset.meta.animations.get(animation)
-    if info is None or frame >= info.frames:
-        raise GenerationError(f"Frame {frame} of '{animation}' does not exist.")
-    render_frames(ctx, asset, progress, animations=[animation], directions=[direction], only_frames=[(animation, direction, frame)])
-    return asset.path("animations", animation, direction, "final", f"frame_{frame:03d}.png")
-
-
-def set_animation(asset: Asset, name: str, frames: int | None = None, fps: int | None = None, loop: bool | None = None) -> None:
-    anims = asset.meta.settings.setdefault("animations", {})
-    cfg = anims.setdefault(name, dict(ANIMATION_DEFAULTS.get(name, {"frames": 4, "fps": 10, "loop": True})))
-    if frames is not None:
-        cfg["frames"] = max(1, min(64, int(frames)))
-    if fps is not None:
-        cfg["fps"] = max(1, min(60, int(fps)))
-    if loop is not None:
-        cfg["loop"] = bool(loop)
-    info = asset.meta.animations.get(name)
-    if info is not None and fps is not None:
-        info.fps = cfg["fps"]

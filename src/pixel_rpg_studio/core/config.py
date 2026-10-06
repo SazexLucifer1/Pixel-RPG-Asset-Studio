@@ -74,7 +74,6 @@ class ProviderSettings:
     image: str = "comfyui"
     threed: str = "comfyui_hunyuan3d"
     renderer: str = "blender"
-    animation: str = "blender_procedural"
     image_processing: str = "builtin"
 
 

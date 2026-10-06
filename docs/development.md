@@ -35,10 +35,12 @@ $env:QT_QPA_PLATFORM = "offscreen"
 | `test_comfyui_client.py`, `test_ws.py` | real HTTP communication with `tests/fake_comfyui.py`: generation, upload, missing models/nodes, execution errors, HTTP 500, cancel; WebSocket frames |
 | `test_pixel.py`, `test_tiles_vfx.py` | deterministic pixel processing, seamless tiles, terrain sets, VFX |
 | `test_spritesheet.py`, `test_godot_export.py` | sheet layout/metadata, `.tres` format, overwrite protection |
-| `test_pipeline_e2e.py` | full pipelines with mock providers (character vertical slice, single-frame regeneration, objects, buildings, tiles, backgrounds, VFX) |
+| `test_pipeline_e2e.py` | full pipelines with mock providers (objects, buildings, tiles, backgrounds, VFX) |
+| `test_character.py` | 2D character pipeline with mock AI: identity from reference, palette lock, per-frame records, single-frame regeneration (seed only), pose edits, custom animations, sprite sizes, sheets + Godot |
+| `test_poses.py` | skeleton projection per direction, face-point visibility, templates/frame counts, presets, pose editing, OpenPose drawing |
 | `test_launcher.py`, `test_system.py` | ComfyUI install detection and launch commands, crash during start, GPU parsing, hardware profiles, model catalog, diagnostics |
-| `test_blender_integration.py` | **real Blender**: rig, animation, framing stability, multi-view props, broken model. Skipped if Blender is not found; set `PIXEL_RPG_TEST_BLENDER` to choose an executable. |
-| `test_ui.py` | offscreen UI: every page loads, the character studio runs a full pipeline, error dialogs, style/settings pages |
+| `test_blender_integration.py` | **real Blender**: multi-view props, broken model. Skipped if Blender is not found; set `PIXEL_RPG_TEST_BLENDER` to choose an executable. |
+| `test_ui.py` | offscreen UI: every page loads, the character studio runs reference → identity → animation → pose edit → frame regeneration, error dialogs, style/settings pages |
 | `test_app_cli.py` | `--version`, `--self-test`, `--diagnose` |
 
 The generated Godot resources were also checked by loading them in Godot 4.3 (`SpriteFrames` animations/fps/loop, `TileSet` terrain mode and peering bits). To repeat that check, export a character and a tileset into a Godot project, then `load()` the `.tres` files from a script.

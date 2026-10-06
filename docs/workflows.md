@@ -3,14 +3,13 @@
 Workflows live in `workflows/` as pairs:
 
 ```
-character_concept.json            ComfyUI graph in API format
-character_concept.manifest.json   which inputs are parameters / model roles / outputs
+object_concept.json            ComfyUI graph in API format
+object_concept.manifest.json   which inputs are parameters / model roles / outputs
 ```
 
 | Workflow | Kind | Used by |
 |---|---|---|
-| `character_concept` | text → image | Character Studio |
-| `character_concept_reference` | reference image → image (img2img) | Character Studio with a reference |
+| `character_frame` | reference image (IP-Adapter) + OpenPose skeleton (ControlNet) → one animation frame | Character Studio |
 | `object_concept`, `object_concept_reference` | text/reference → image | weapons, items, props, environment |
 | `building_concept` | text → image (wide) | Buildings |
 | `background_generation` | text → wide image | Backgrounds |
@@ -18,14 +17,14 @@ character_concept.manifest.json   which inputs are parameters / model roles / ou
 | `pixel_cleanup` | low-denoise img2img | optional style unification pass |
 | `image_to_3d_hunyuan` | image → GLB mesh | 3D generation (native ComfyUI Hunyuan3D v2 nodes) |
 
-All image workflows use **core ComfyUI nodes only** (no custom node packs needed).
+All image workflows use **core ComfyUI nodes only**, except `character_frame`, which needs the custom node pack **ComfyUI_IPAdapter_plus** (`IPAdapterModelLoader`, `IPAdapterAdvanced`). Its parameters: `reference_image`, `reference_strength` (IP-Adapter weight), `equipment_image`, `equipment_strength`, `pose_image`, `pose_strength` (ControlNet strength), `prompt`, `negative_prompt`, `seed`, `width`, `height`, `steps`, `cfg`; model roles `image.checkpoint`, `image.pixel_lora`, `image.ipadapter`, `image.clip_vision`, `image.controlnet_openpose`. It was validated against ComfyUI 0.39 with ComfyUI_IPAdapter_plus (`/prompt` accepted the graph).
 
 ## Manifest format
 
 ```json
 {
-  "name": "character_concept",
-  "title": "Character concept (SDXL + pixel-art LoRA)",
+  "name": "object_concept",
+  "title": "Object concept (SDXL + pixel-art LoRA)",
   "kind": "image",
   "description": "...",
   "requirements": ["human readable requirement", "..."],

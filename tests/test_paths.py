@@ -28,7 +28,7 @@ def test_is_within(tmp_path):
 
 
 def test_resources_exist():
-    assert (paths.bundled_workflows_dir() / "character_concept.json").is_file()
+    assert (paths.bundled_workflows_dir() / "object_concept.json").is_file()
     assert (paths.bundled_config_dir() / "models_catalog.json").is_file()
     assert (paths.blender_scripts_dir() / "studio_blender.py").is_file()
 

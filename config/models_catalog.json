@@ -14,7 +14,9 @@
       "license": "CreativeML Open RAIL++-M",
       "license_url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
       "notes": "Any SDXL-compatible checkpoint can be used instead (choose it in AI Models). Stylized SDXL fine-tunes often give better pixel art.",
-      "providers": ["comfyui"]
+      "providers": [
+        "comfyui"
+      ]
     },
     {
       "id": "pixel_art_xl_lora",
@@ -28,7 +30,57 @@
       "license": "See model card (CreativeML Open RAIL-M family)",
       "license_url": "https://huggingface.co/nerijs/pixel-art-xl",
       "notes": "Dedicated pixel-art style LoRA. Any SDXL pixel-art LoRA can be configured instead. The app's deterministic pixel processing produces the final pixel grid either way.",
-      "providers": ["comfyui"]
+      "providers": [
+        "comfyui"
+      ]
+    },
+    {
+      "id": "ip_adapter_plus_sdxl_vith",
+      "name": "IP-Adapter Plus SDXL (ViT-H) - character identity",
+      "role": "image.ipadapter",
+      "folder": "ipadapter",
+      "filename": "ip-adapter-plus_sdxl_vit-h.safetensors",
+      "size_gb": 0.85,
+      "min_vram_gb": 0,
+      "download_page": "https://huggingface.co/h94/IP-Adapter/tree/main/sdxl_models",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/h94/IP-Adapter",
+      "notes": "Download sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors into ComfyUI/models/ipadapter (create the folder if needed). Feeds the character reference image into every frame (real image conditioning). Needs the custom node pack ComfyUI_IPAdapter_plus.",
+      "providers": [
+        "comfyui"
+      ]
+    },
+    {
+      "id": "clip_vision_vith",
+      "name": "CLIP Vision ViT-H image encoder (for IP-Adapter)",
+      "role": "image.clip_vision",
+      "folder": "clip_vision",
+      "filename": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors",
+      "size_gb": 2.5,
+      "min_vram_gb": 0,
+      "download_page": "https://huggingface.co/h94/IP-Adapter/tree/main/models/image_encoder",
+      "license": "Apache-2.0 (h94/IP-Adapter); original weights MIT (LAION)",
+      "license_url": "https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+      "notes": "Download models/image_encoder/model.safetensors and save it as ComfyUI/models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors.",
+      "providers": [
+        "comfyui"
+      ]
+    },
+    {
+      "id": "controlnet_openpose_sdxl_xinsir",
+      "name": "ControlNet OpenPose SDXL (xinsir) - poses",
+      "role": "image.controlnet_openpose",
+      "folder": "controlnet",
+      "filename": "xinsir-openpose-sdxl-1.0.safetensors",
+      "size_gb": 2.5,
+      "min_vram_gb": 0,
+      "download_page": "https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0/tree/main",
+      "license": "Apache-2.0",
+      "license_url": "https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0",
+      "notes": "Download diffusion_pytorch_model.safetensors and save it as ComfyUI/models/controlnet/xinsir-openpose-sdxl-1.0.safetensors. Makes the AI follow the skeleton drawn by the pose editor.",
+      "providers": [
+        "comfyui"
+      ]
     },
     {
       "id": "hunyuan3d_2_mini",
@@ -43,11 +95,37 @@
       "license_url": "https://huggingface.co/tencent/Hunyuan3D-2mini/blob/main/LICENSE",
       "license_warning": "This license does NOT grant rights in the European Union, the United Kingdom and South Korea, and has additional conditions. If it does not fit your situation, import 3D models you made yourself (or from another tool/model whose license fits) - the rest of the pipeline works the same.",
       "notes": "Download 'hunyuan3d-dit-v2-mini/model.fp16.safetensors' and save it as models/checkpoints/hunyuan3d-dit-v2-mini.safetensors. Requires a ComfyUI version with native Hunyuan3D v2 nodes. Shape only (no texture) - colours are projected from the concept image in Blender.",
-      "providers": ["comfyui_hunyuan3d"]
+      "providers": [
+        "comfyui_hunyuan3d"
+      ]
     }
   ],
   "tools": [
-    {"id": "comfyui", "name": "ComfyUI", "download_page": "https://github.com/comfyanonymous/ComfyUI/releases", "desktop_page": "https://www.comfy.org/download", "license": "GPL-3.0"},
-    {"id": "blender", "name": "Blender", "download_page": "https://www.blender.org/download/", "license": "GPL-2.0-or-later"}
+    {
+      "id": "comfyui",
+      "name": "ComfyUI",
+      "download_page": "https://github.com/comfyanonymous/ComfyUI/releases",
+      "desktop_page": "https://www.comfy.org/download",
+      "license": "GPL-3.0"
+    },
+    {
+      "id": "blender",
+      "name": "Blender",
+      "download_page": "https://www.blender.org/download/",
+      "license": "GPL-2.0-or-later"
+    }
+  ],
+  "custom_nodes": [
+    {
+      "id": "comfyui_ipadapter_plus",
+      "name": "ComfyUI_IPAdapter_plus",
+      "provides": [
+        "IPAdapterModelLoader",
+        "IPAdapterAdvanced"
+      ],
+      "page": "https://github.com/cubiq/ComfyUI_IPAdapter_plus",
+      "license": "GPL-3.0",
+      "install": "In ComfyUI open Manager \u2192 Custom Nodes Manager, search 'ComfyUI_IPAdapter_plus' (by cubiq), Install, then restart ComfyUI. Without Manager: git clone the page into ComfyUI/custom_nodes and restart."
+    }
   ]
 }

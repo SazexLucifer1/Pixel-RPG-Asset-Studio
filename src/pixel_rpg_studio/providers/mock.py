@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from pixel_rpg_studio.imaging.pixel import crop_to_content, remove_background
 from pixel_rpg_studio.providers.base import (
@@ -38,7 +38,7 @@ from pixel_rpg_studio.providers.base import (
     _never,
     _noop_progress,
 )
-from pixel_rpg_studio.providers.blockout import humanoid_boxes, object_boxes, write_obj
+from pixel_rpg_studio.providers.blockout import object_boxes, write_obj
 
 
 def _rng(seed: int, text: str = "") -> np.random.Generator:
@@ -50,36 +50,49 @@ def _color(rng: np.random.Generator) -> tuple[int, int, int]:
     return tuple(int(v) for v in rng.integers(40, 230, 3))
 
 
-def mock_character(size: int, seed: int, prompt: str) -> Image.Image:
-    """A T-pose figure drawn with the same proportions as the blockout humanoid,
-    so demo mode (mock concept + blockout mesh + Blender) projects sensibly."""
-    rng = _rng(seed, prompt)
+def mock_reference(size: int = 512) -> Image.Image:
+    """A simple character drawing on white (self-test / demo reference image)."""
     img = Image.new("RGB", (size, size), (255, 255, 255))
     d = ImageDraw.Draw(img)
-
-    def box(x0, z0, x1, z1, color):  # blockout coordinates in units of body height
-        def px(x):
-            return (50 + x * 90) * size / 100
-
-        def py(z):
-            return (95 - z * 90) * size / 100
-
-        d.rectangle((px(x0), py(z1), px(x1), py(z0)), fill=color)
-
-    skin, shirt, pants, hair = (232, 190, 150), _color(rng), _color(rng), _color(rng)
-    box(-0.16, 0.48, 0.16, 0.8, shirt)  # torso
-    box(-0.1, 0.82, 0.1, 1.0, skin)  # head
-    box(-0.1, 0.94, 0.1, 1.0, hair)
-    box(-0.05, 0.79, 0.05, 0.83, skin)  # neck
-    box(0.16, 0.72, 0.46, 0.79, shirt)  # arms
-    box(-0.46, 0.72, -0.16, 0.79, shirt)
-    box(0.46, 0.72, 0.5, 0.79, skin)  # hands
-    box(-0.5, 0.72, -0.46, 0.79, skin)
-    box(0.02, 0.06, 0.14, 0.49, pants)  # legs
-    box(-0.14, 0.06, -0.02, 0.49, pants)
-    box(0.02, 0.0, 0.14, 0.06, (60, 45, 35))  # boots
-    box(-0.14, 0.0, -0.02, 0.06, (60, 45, 35))
+    s = size / 100
+    steel, dark, blue = (170, 175, 190), (60, 60, 75), (40, 80, 170)
+    d.rectangle((42 * s, 52 * s, 49 * s, 90 * s), fill=dark)  # legs
+    d.rectangle((51 * s, 52 * s, 58 * s, 90 * s), fill=dark)
+    d.rectangle((38 * s, 26 * s, 62 * s, 55 * s), fill=steel)  # torso
+    d.rectangle((38 * s, 40 * s, 62 * s, 44 * s), fill=blue)
+    d.rectangle((31 * s, 27 * s, 37 * s, 52 * s), fill=steel)  # arms
+    d.rectangle((63 * s, 27 * s, 69 * s, 52 * s), fill=steel)
+    d.ellipse((41 * s, 8 * s, 59 * s, 26 * s), fill=steel)  # helmet
+    d.rectangle((44 * s, 15 * s, 56 * s, 19 * s), fill=dark)  # visor
+    d.rectangle((70 * s, 10 * s, 73 * s, 52 * s), fill=(210, 210, 225))  # sword
+    d.rectangle((22 * s, 30 * s, 31 * s, 50 * s), fill=blue)  # shield
     return img
+
+
+def mock_character_frame(size: int, seed: int, pose_image: Path | None, reference: Path | None) -> Image.Image:
+    """Demo stand-in for the AI character frame: the OpenPose skeleton is
+    thickened into a puppet silhouette and coloured from the reference image
+    (sampled at the same canvas position). It follows the pose exactly, so
+    the whole character pipeline can be tested without a GPU."""
+    canvas = Image.new("RGB", (size, size), (255, 255, 255))
+    if pose_image is None or not Path(pose_image).is_file():
+        return canvas
+    small = 192  # thicken the limbs at low resolution (fast), then scale up
+    pose = np.array(Image.open(pose_image).convert("RGB").resize((small, small), Image.BOX)).astype(np.int32)
+    mask = Image.fromarray(((pose.max(axis=2) > 20) * 255).astype(np.uint8), "L").copy()
+    mask = mask.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.MaxFilter(7))
+    m = np.array(mask.resize((size, size), Image.NEAREST)) > 0
+    rng = _rng(seed)
+    if reference is not None and Path(reference).is_file():
+        ref = np.array(Image.open(reference).convert("RGB").resize((size, size), Image.NEAREST)).astype(np.int32)
+        body = ref[ref.min(axis=2) < 235]
+        base = np.median(body, axis=0) if len(body) else np.array(_color(rng))
+        colors = np.where((ref.min(axis=2) < 235)[..., None], ref, base[None, None, :])
+    else:
+        colors = np.broadcast_to(np.array(_color(rng)), (size, size, 3))
+    arr = np.array(canvas).astype(np.int32)
+    arr[m] = colors[m]
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGB").copy()
 
 
 def mock_object(size: int, seed: int, prompt: str) -> Image.Image:
@@ -141,14 +154,14 @@ class MockImageProvider(ImageGenerationProvider):
             seed = request.seed + n
             wf = request.workflow
             if "character" in wf:
-                img = mock_character(min(w, h), seed, request.prompt)
+                img = mock_character_frame(min(w, h), seed, request.images.get("pose_image"), request.images.get("reference_image"))
             elif "background" in wf:
                 img = mock_background(w, h, seed, request.prompt)
             elif "tile" in wf:
                 img = mock_texture(min(w, h), seed, request.prompt)
             else:
                 img = mock_object(min(w, h), seed, request.prompt)
-            if request.reference_image is not None:
+            if request.reference_image is not None and "character" not in wf:
                 ref = Image.open(request.reference_image).convert("RGB").resize(img.size)
                 img = Image.blend(img, ref, 0.35)
             path = out_dir / f"mock_{seed}_{n}.png"
@@ -168,7 +181,7 @@ class MockThreeDProvider(ThreeDGenerationProvider):
 
     def generate(self, request: ThreeDRequest, out_dir: Path, progress: ProgressFn = _noop_progress,
                  cancelled: CancelledFn = _never) -> ThreeDResult:
-        boxes = humanoid_boxes() if request.asset_kind == "character" else object_boxes(request.asset_kind)
+        boxes = object_boxes(request.asset_kind)
         path = write_obj(boxes, Path(out_dir) / f"blockout_{request.asset_kind}_{request.seed}.obj")
         return ThreeDResult(path, self.id, request.seed, model="blockout", workflow="procedural_blockout")
 
@@ -185,11 +198,10 @@ class MockRenderer(RendererProvider):
     def prepare(self, request: PrepareRequest, progress: ProgressFn = _noop_progress, cancelled: CancelledFn = _never) -> PrepareResult:
         request.blend_path.parent.mkdir(parents=True, exist_ok=True)
         source = request.concept_image or request.texture_image
-        data = {"mock": True, "texture": str(source) if source else "", "model": str(request.model_path),
-                "rig_mode": request.rig_mode}
+        data = {"mock": True, "texture": str(source) if source else "", "model": str(request.model_path)}
         request.blend_path.write_text(json.dumps(data), encoding="utf-8")
         report = {"ok": True, "warnings": ["Mock renderer: no real 3D processing was performed."],
-                  "rig": {"mode": request.rig_mode, "weights": "mock"}, "mesh": {}}
+                  "mesh": {}}
         return PrepareResult(request.blend_path, report, self.id)
 
     def render(self, request: RenderRequest, progress: ProgressFn = _noop_progress, cancelled: CancelledFn = _never) -> RenderResult:
@@ -215,7 +227,6 @@ class MockRenderer(RendererProvider):
                         from pixel_rpg_studio.core.errors import JobCancelledError
 
                         raise JobCancelledError()
-                    p = i / anim.frames if anim.loop else i / max(1, anim.frames - 1)
                     img = base
                     if key in ("w", "e", "sw", "se", "nw", "ne"):
                         img = img.resize((max(1, int(img.width * 0.6)), img.height), Image.NEAREST)
@@ -225,22 +236,9 @@ class MockRenderer(RendererProvider):
                         arr = np.array(img)
                         arr[..., :3] = (arr[..., :3] * 0.7).astype(np.uint8)
                         img = Image.fromarray(arr, "RGBA")
-                    dx = dy = 0
-                    angle = 0.0
-                    if anim.name in ("walk", "run"):
-                        dy = int(abs(math.sin(2 * math.pi * p)) * H * 0.03)
-                        dx = int(math.sin(2 * math.pi * p) * W * 0.02)
-                    elif anim.name == "idle":
-                        dy = int((1 - math.cos(2 * math.pi * p)) * H * 0.01)
-                    elif anim.name == "death":
-                        angle = 90 * p
-                    elif anim.name in ("attack", "heavy_attack", "hit", "dodge"):
-                        dx = int(math.sin(math.pi * p) * W * 0.08) * (-1 if anim.name in ("hit", "dodge") else 1)
-                    if angle:
-                        img = img.rotate(angle, resample=Image.NEAREST, expand=True)
                     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                    x = (W - img.width) // 2 + dx
-                    y = H - img.height - int(H * 0.05) + dy
+                    x = (W - img.width) // 2
+                    y = H - img.height - int(H * 0.05)
                     canvas.alpha_composite(img, (max(0, x), max(0, y)))
                     path = Path(request.output_dir) / anim.name / key / f"frame_{i:03d}.png"
                     path.parent.mkdir(parents=True, exist_ok=True)

@@ -37,10 +37,20 @@ Logs live in `%APPDATA%\PixelRPGAssetStudio\logs\`:
 |---|---|
 | "Blender was not found" | Install Blender 3.6+ or select `blender.exe` in *Settings → Blender*. |
 | "Blender exited without producing a result" | See `blender.log`. Update the GPU driver. Make sure the model file is not corrupt. |
-| Character faces away | *Model facing → Rotate 180°*, then *Prepare Model* again. |
-| Rig report: "fell back to envelope weights" or many unweighted vertices | The mesh is not a clean upright humanoid (holes, merged arms, A-pose with arms touching the body). Options: regenerate the 3D model with another seed; use a concept in a clear T-pose; open the `.blend`, fix weights, save and re-render; or import a rigged model (e.g. from Mixamo) whose actions are named like the animations. |
-| Arms or legs bend strangely | Same as above. Procedural animation assumes the bone layout of the automatic rig, or a Mixamo-style rig. |
-| Sprite is small in the frame | Framing covers every animation, including the lying death pose, so the scale stays identical everywhere. Use *Framing → Fit selected animations only* or a larger sprite size. |
+| Object faces away | *Model facing → Rotate 180°*, then *Prepare Model* again. |
+
+## Characters
+
+| Symptom | Cause / fix |
+|---|---|
+| "missing node types: IPAdapterAdvanced, IPAdapterModelLoader" | The custom node pack **ComfyUI_IPAdapter_plus** is not installed. ComfyUI → Manager → Custom Nodes Manager → search *IPAdapter plus* (cubiq) → Install → restart ComfyUI. Without Manager: `git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus` into `ComfyUI/custom_nodes`. |
+| "Required model missing: ip-adapter-plus_sdxl_vit-h.safetensors" / CLIP-ViT-H / xinsir-openpose | Download from the *AI Models* page and put the file into `models/ipadapter`, `models/clip_vision` or `models/controlnet` with exactly the listed file name (or choose your file with *Choose Installed File…*). Restart ComfyUI after creating the `ipadapter` folder. |
+| "This character has no identity yet" | Choose a *Reference Image* and press *Create Character* first. |
+| The character does not look like the reference | Raise *Reference Strength* (0.9–1.1), keep the description short and matching the image, use a reference with a plain background and the full body visible. |
+| The pose is ignored / limbs in wrong places | Raise *Pose Strength* (1.0–1.2) or lower *Reference Strength* a bit. Check the frame in the *Pose Editor*. |
+| One frame is bad | Select it under FRAMES → *Regenerate Selected Frame* (new seed, everything else identical), or fix its pose first. |
+| Background pixels remain around the sprite | The AI drew a background or a floor shadow. Regenerate the frame; references with a plain background help. |
+| Out of memory on 8 GB | VRAM profile *low* (768 px canvas, fewer steps), keep *Unload AI models between stages* on, close browsers/games. Frames are always generated one at a time. |
 
 ## Pixel output
 

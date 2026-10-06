@@ -1,0 +1,258 @@
+{
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sd_xl_base_1.0.safetensors"
+    },
+    "_meta": {
+      "title": "Base model (SDXL)"
+    }
+  },
+  "10": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "clip": [
+        "4",
+        1
+      ],
+      "lora_name": "pixel-art-xl.safetensors",
+      "strength_model": 0.8,
+      "strength_clip": 0.8
+    },
+    "_meta": {
+      "title": "Pixel-art LoRA"
+    }
+  },
+  "20": {
+    "class_type": "IPAdapterModelLoader",
+    "inputs": {
+      "ipadapter_file": "ip-adapter-plus_sdxl_vit-h.safetensors"
+    },
+    "_meta": {
+      "title": "IP-Adapter model"
+    }
+  },
+  "21": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"
+    },
+    "_meta": {
+      "title": "CLIP Vision encoder (ViT-H)"
+    }
+  },
+  "22": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    },
+    "_meta": {
+      "title": "Character reference (identity)"
+    }
+  },
+  "23": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    },
+    "_meta": {
+      "title": "Equipment reference"
+    }
+  },
+  "25": {
+    "class_type": "IPAdapterAdvanced",
+    "inputs": {
+      "model": [
+        "10",
+        0
+      ],
+      "ipadapter": [
+        "20",
+        0
+      ],
+      "image": [
+        "22",
+        0
+      ],
+      "weight": 0.8,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "embeds_scaling": "V only",
+      "clip_vision": [
+        "21",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Identity conditioning (Reference Strength)"
+    }
+  },
+  "26": {
+    "class_type": "IPAdapterAdvanced",
+    "inputs": {
+      "model": [
+        "25",
+        0
+      ],
+      "ipadapter": [
+        "20",
+        0
+      ],
+      "image": [
+        "23",
+        0
+      ],
+      "weight": 0.0,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "embeds_scaling": "V only",
+      "clip_vision": [
+        "21",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Equipment conditioning"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "",
+      "clip": [
+        "10",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Positive prompt"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "",
+      "clip": [
+        "10",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "Negative prompt"
+    }
+  },
+  "30": {
+    "class_type": "ControlNetLoader",
+    "inputs": {
+      "control_net_name": "xinsir-openpose-sdxl-1.0.safetensors"
+    },
+    "_meta": {
+      "title": "OpenPose ControlNet (SDXL)"
+    }
+  },
+  "31": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    },
+    "_meta": {
+      "title": "Pose (OpenPose skeleton)"
+    }
+  },
+  "32": {
+    "class_type": "ControlNetApplyAdvanced",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "control_net": [
+        "30",
+        0
+      ],
+      "image": [
+        "31",
+        0
+      ],
+      "strength": 0.85,
+      "start_percent": 0.0,
+      "end_percent": 1.0
+    },
+    "_meta": {
+      "title": "Pose conditioning (Pose Strength)"
+    }
+  },
+  "5": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Canvas (one frame, no batch)"
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 0,
+      "steps": 30,
+      "cfg": 5.5,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0,
+      "model": [
+        "26",
+        0
+      ],
+      "positive": [
+        "32",
+        0
+      ],
+      "negative": [
+        "32",
+        1
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "pixel_rpg_studio/character_frame",
+      "images": [
+        "8",
+        0
+      ]
+    }
+  }
+}

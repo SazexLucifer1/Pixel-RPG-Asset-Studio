@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # Pipeline kinds: which shared pipeline produces the asset.
-PIPELINE_RIGGED_3D = "rigged_3d"  # concept -> 3D -> rig -> animate -> render -> pixel
+PIPELINE_CHARACTER_2D = "character_2d"  # reference -> identity -> pose -> AI frame -> pixel (pipeline/character.py)
 PIPELINE_STATIC_3D = "static_3d"  # concept -> 3D -> render views -> pixel
 PIPELINE_IMAGE_2D = "image_2d"  # concept -> pixel (no 3D)
 PIPELINE_TILESET = "tileset"
@@ -38,14 +38,6 @@ DIRECTIONS: dict[str, ViewDirection] = {
         ViewDirection("se", "Front-right", 315.0),
     )
 }
-
-DIRECTION_SETS: dict[str, tuple[str, ...]] = {
-    "1 (front only)": ("s",),
-    "side (left/right)": ("w", "e"),
-    "4 directions": ("s", "w", "n", "e"),
-    "8 directions": ("s", "sw", "w", "nw", "n", "ne", "e", "se"),
-}
-
 
 @dataclass(frozen=True)
 class AssetType:
@@ -80,45 +72,13 @@ def all_asset_types() -> list[AssetType]:
     return list(_REGISTRY.values())
 
 
-ANIMATIONS = (
-    "idle",
-    "walk",
-    "run",
-    "attack",
-    "heavy_attack",
-    "hit",
-    "death",
-    "block",
-    "skill",
-    "cast",
-    "dodge",
-)
-
-ANIMATION_DEFAULTS: dict[str, dict] = {
-    "idle": {"frames": 4, "fps": 6, "loop": True},
-    "walk": {"frames": 6, "fps": 10, "loop": True},
-    "run": {"frames": 6, "fps": 12, "loop": True},
-    "attack": {"frames": 6, "fps": 12, "loop": False},
-    "heavy_attack": {"frames": 8, "fps": 10, "loop": False},
-    "hit": {"frames": 3, "fps": 10, "loop": False},
-    "death": {"frames": 6, "fps": 8, "loop": False},
-    "block": {"frames": 3, "fps": 8, "loop": False},
-    "skill": {"frames": 6, "fps": 10, "loop": False},
-    "cast": {"frames": 6, "fps": 10, "loop": False},
-    "dodge": {"frames": 5, "fps": 12, "loop": False},
-}
-
-
 def _register_defaults() -> None:
     for t in (
         AssetType(
-            "character", "Characters", "characters", PIPELINE_RIGGED_3D,
-            "Playable characters, NPCs and enemies with animations.",
-            subtypes=("humanoid", "creature"),
-            default_directions=DIRECTION_SETS["4 directions"],
-            concept_workflow="character_concept",
-            prompt_template="full body character, {description}, standing in T-pose, front view, "
-            "plain white background, centered",
+            "character", "Characters", "characters", PIPELINE_CHARACTER_2D,
+            "Playable characters, NPCs and enemies: reference image -> identity -> poses -> animated pixel-art frames.",
+            default_directions=("s", "n", "w", "e"),
+            concept_workflow="character_frame",
             animated=True,
         ),
         AssetType(

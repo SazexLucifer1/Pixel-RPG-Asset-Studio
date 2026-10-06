@@ -44,10 +44,10 @@ def test_full_image_generation(fake_comfy, tmp_path):
     client = ComfyUIClient(fake_comfy.url)
     provider = ComfyUIImageProvider(client, WorkflowLibrary(), {}, profile="medium")
     progress = []
-    res = provider.generate(ImageRequest("character_concept", "hero", "bad", seed=99), tmp_path, progress=lambda f, m: progress.append(m))
+    res = provider.generate(ImageRequest("object_concept", "hero", "bad", seed=99), tmp_path, progress=lambda f, m: progress.append(m))
     assert res.images and res.images[0].exists()
     assert Image.open(res.images[0]).size == (64, 64)
-    assert res.seed == 99 and res.workflow == "character_concept"
+    assert res.seed == 99 and res.workflow == "object_concept"
     assert res.models["image.checkpoint"] == "sd_xl_base_1.0.safetensors"
     sent = fake_comfy.prompts[-1]
     assert sent["3"]["inputs"]["seed"] == 99 and sent["6"]["inputs"]["text"] == "hero"
@@ -59,15 +59,32 @@ def test_reference_upload(fake_comfy, tmp_path):
     ref = tmp_path / "ref.png"
     Image.new("RGB", (32, 32)).save(ref)
     provider = ComfyUIImageProvider(ComfyUIClient(fake_comfy.url), WorkflowLibrary(), {})
-    provider.generate(ImageRequest("character_concept_reference", "hero", seed=1, reference_image=ref), tmp_path / "out")
+    provider.generate(ImageRequest("object_concept_reference", "hero", seed=1, reference_image=ref), tmp_path / "out")
     assert fake_comfy.uploads
     assert fake_comfy.prompts[-1]["11"]["inputs"]["image"] == "pixel_rpg_studio/ref.png"
+
+
+def test_character_frame_uploads_reference_and_pose(fake_comfy, tmp_path):
+    ref, pose = tmp_path / "ref.png", tmp_path / "pose.png"
+    Image.new("RGB", (32, 32), "white").save(ref)
+    Image.new("RGB", (32, 32)).save(pose)
+    provider = ComfyUIImageProvider(ComfyUIClient(fake_comfy.url), WorkflowLibrary(), {}, profile="low")
+    res = provider.generate(ImageRequest("character_frame", "knight", seed=4, width=768, height=768,
+                                         params={"reference_strength": 0.7, "pose_strength": 0.9},
+                                         images={"reference_image": ref, "equipment_image": ref, "pose_image": pose}), tmp_path / "o")
+    sent = fake_comfy.prompts[-1]
+    assert sent["22"]["inputs"]["image"] == "pixel_rpg_studio/reference_image.png"
+    assert sent["31"]["inputs"]["image"] == "pixel_rpg_studio/pose_image.png"
+    assert sent["25"]["inputs"]["weight"] == 0.7 and sent["32"]["inputs"]["strength"] == 0.9
+    assert res.models["image.ipadapter"] == "ip-adapter-plus_sdxl_vit-h.safetensors"
+    with pytest.raises(GenerationError):
+        provider.generate(ImageRequest("character_frame", "x", images={"nope": ref}), tmp_path / "o")
 
 
 def test_missing_model_explained(fake_comfy, tmp_path):
     provider = ComfyUIImageProvider(ComfyUIClient(fake_comfy.url), WorkflowLibrary(), {"image.checkpoint": "nope.safetensors"})
     with pytest.raises(MissingModelError) as e:
-        provider.generate(ImageRequest("character_concept", "x", seed=1), tmp_path)
+        provider.generate(ImageRequest("object_concept", "x", seed=1), tmp_path)
     assert "Required model missing" in e.value.message
     assert "nope.safetensors" in e.value.message
 
@@ -85,12 +102,12 @@ def test_execution_error_explained(fake_comfy, tmp_path):
     fake_comfy.fail_execution = "CUDA out of memory. Tried to allocate 2 GiB"
     provider = ComfyUIImageProvider(ComfyUIClient(fake_comfy.url), WorkflowLibrary(), {})
     with pytest.raises(GenerationError) as e:
-        provider.generate(ImageRequest("character_concept", "x", seed=1), tmp_path)
+        provider.generate(ImageRequest("object_concept", "x", seed=1), tmp_path)
     assert e.value.code == "gpu_oom"
     assert "Low VRAM" in e.value.hint
     fake_comfy.fail_execution = "Some node broke"
     with pytest.raises(GenerationError) as e:
-        provider.generate(ImageRequest("character_concept", "x", seed=1), tmp_path)
+        provider.generate(ImageRequest("object_concept", "x", seed=1), tmp_path)
     assert "custom nodes" in e.value.hint
 
 
@@ -115,7 +132,7 @@ def test_hunyuan_mesh_download(fake_comfy, tmp_path):
 
 def test_cancel_interrupts(fake_comfy):
     client = ComfyUIClient(fake_comfy.url)
-    wf = WorkflowLibrary().get("character_concept").build({"prompt": "x", "seed": 1})
+    wf = WorkflowLibrary().get("object_concept").build({"prompt": "x", "seed": 1})
     fake_comfy.history.clear()
     from pixel_rpg_studio.core.errors import JobCancelledError
 

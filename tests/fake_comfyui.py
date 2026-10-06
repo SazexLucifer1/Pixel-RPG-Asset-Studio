@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +19,9 @@ from PIL import Image
 INSTALLED = {
     "checkpoints": ["sd_xl_base_1.0.safetensors", "hunyuan3d-dit-v2-mini.safetensors"],
     "loras": ["pixel-art-xl.safetensors"],
+    "ipadapter": ["ip-adapter-plus_sdxl_vit-h.safetensors"],
+    "clip_vision": ["CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"],
+    "controlnet": ["xinsir-openpose-sdxl-1.0.safetensors"],
 }
 
 
@@ -28,10 +32,14 @@ def object_info():
         "CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": ck}}},
         "ImageOnlyCheckpointLoader": {"input": {"required": {"ckpt_name": ["COMBO", {"options": INSTALLED["checkpoints"]}]}}},
         "LoraLoader": {"input": {"required": {"lora_name": [INSTALLED["loras"], {}]}}},
+        "IPAdapterModelLoader": {"input": {"required": {"ipadapter_file": [INSTALLED["ipadapter"], {}]}}},
+        "CLIPVisionLoader": {"input": {"required": {"clip_name": [INSTALLED["clip_vision"], {}]}}},
+        "ControlNetLoader": {"input": {"required": {"control_net_name": [INSTALLED["controlnet"], {}]}}},
     }
     for n in ("CLIPTextEncode", "EmptyLatentImage", "KSampler", "VAEDecode", "SaveImage", "LoadImage", "VAEEncode",
               "ImageScaleToTotalPixels", "CLIPVisionEncode", "Hunyuan3Dv2Conditioning", "EmptyLatentHunyuan3Dv2",
-              "ModelSamplingAuraFlow", "VAEDecodeHunyuan3D", "VoxelToMeshBasic", "VoxelToMesh", "SaveGLB"):
+              "ModelSamplingAuraFlow", "VAEDecodeHunyuan3D", "VoxelToMeshBasic", "VoxelToMesh", "SaveGLB",
+              "IPAdapterAdvanced", "ControlNetApplyAdvanced"):
         info[n] = {"input": simple}
     return info
 
@@ -106,8 +114,10 @@ class FakeComfyUI:
                 url = urlparse(self.path)
                 body = self._body()
                 if url.path == "/upload/image":
-                    server.uploads.append(str(len(body)))
-                    self._json({"name": "ref.png", "subfolder": "pixel_rpg_studio", "type": "input"})
+                    m = re.search(rb'filename="([^"]+)"', body)
+                    name = m.group(1).decode() if m else "ref.png"
+                    server.uploads.append(name)
+                    self._json({"name": name, "subfolder": "pixel_rpg_studio", "type": "input"})
                 elif url.path == "/prompt":
                     payload = json.loads(body)
                     graph = payload["prompt"]

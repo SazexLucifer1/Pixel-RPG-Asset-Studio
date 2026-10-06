@@ -103,8 +103,8 @@ class DashboardPage(QWidget):
         for text in (
             "1. Projects → create a project for your game (one folder per game).",
             "2. Style → set sprite size, perspective, lighting, outline and palette; add a few reference images.",
-            "3. Characters → describe a character and press 'Run Full Pipeline' (or run the stages one by one).",
-            "4. Review the animation preview, regenerate single frames if needed, then 'Export to Godot'.",
+            "3. Characters → 'Reference Image' (your character) → 'Create Character' → choose animation + direction → 'Generate Animation'.",
+            "4. Review the frames, adjust poses in the Pose Editor, regenerate single frames if needed, then 'Export to Godot'.",
             "Missing something? The Diagnostics page explains exactly what is not installed and how to fix it.",
         ):
             l = QLabel(text)

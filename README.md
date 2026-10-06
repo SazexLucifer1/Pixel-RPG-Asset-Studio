@@ -2,9 +2,9 @@
 
 A Windows-first desktop application for producing a **complete, consistent set of pixel-art assets for Godot games** with **local AI only**.
 
-- **No paid services, no API keys, no Claude at runtime.** Image and 3D generation run on your own GPU through [ComfyUI](https://github.com/comfyanonymous/ComfyUI); 3D processing, rigging and rendering run in [Blender](https://www.blender.org/). Both are free.
+- **No paid services, no API keys, no Claude at runtime.** Image and 3D generation run on your own GPU through [ComfyUI](https://github.com/comfyanonymous/ComfyUI); 3D processing and rendering of objects run in [Blender](https://www.blender.org/). Both are free.
 - **Deterministic pixel processing.** AI produces concepts and 3D shapes. The final pixel grid always comes from reproducible, recorded processing: palette quantisation, mode-downscaling, outlines and alignment.
-- **Consistency by construction.** Characters are rendered from one 3D model with one stored camera framing and a locked palette. Every asset follows the project's global style.
+- **Consistency by construction.** A character is defined by its **reference image**: every frame is generated with that image as real image conditioning (IP-Adapter), the pose comes from an OpenPose skeleton (ControlNet), and all frames share one canvas, one skeleton scale and the palette locked from the reference. Every asset follows the project's global style.
 - **Everything is reproducible.** Seed, model, workflow, prompts, parameters, reference file hashes and timestamps are stored for every step. Single frames can be regenerated without touching the rest of the animation.
 - **Godot-ready.** It exports sprite sheets, individual PNGs, JSON metadata, `SpriteFrames` and `TileSet` resources (with terrain sets for autotiling), plus a helper script. Existing files are never overwritten without confirmation.
 
@@ -14,7 +14,7 @@ A Windows-first desktop application for producing a **complete, consistent set o
 
 | Studio | Pipeline |
 |---|---|
-| Characters | concept → master reference → 3D model → Blender cleanup + colour projection → automatic humanoid rig → procedural animations (idle, walk, run, attack, heavy attack, hit, death, block, skill, cast, dodge) → 1/2/4/8 directions → pixel art → sprite sheets |
+| Characters | reference image → character identity → pose (presets + pose editor, OpenPose) → AI frame (SDXL + IP-Adapter identity + OpenPose ControlNet, one frame at a time) → pixel art (16–128 px, transparent, reference palette) → animations (idle, walk, run, attack, hurt, death, custom) × front/back/left/right → sprite sheets (`knight_walk.png` …) |
 | Weapons, Items, Props, Environment | concept / reference → optional 3D → fixed-camera views → pixel art |
 | Buildings | like props, plus footprint, per-asset perspective/camera angle (incl. top-down), consistent multi-view renders |
 | Tiles / Tilesets | seamless terrain tiles → 16 corner transitions + variants → Godot `TileSet` with terrain set; seamless test grid and connection preview |
@@ -30,7 +30,8 @@ New asset types are added through the registry in `project/asset_types.py` and r
 2. Double-click it. The setup wizard detects your GPU, ComfyUI and Blender, and explains anything that is missing.
 3. Install whatever is missing. Every item has a download link:
    - **ComfyUI** (Portable or Desktop) – runs the AI models
-   - **Blender 3.6 LTS or newer** – 3D processing and rendering
+   - **ComfyUI_IPAdapter_plus** custom nodes (install with ComfyUI-Manager) – needed for characters
+   - **Blender 3.6 LTS or newer** – 3D processing and rendering of objects and buildings
    - **AI models** – listed with official download pages and licenses on the *AI Models* page. They are never downloaded automatically.
 4. Create a project, set up its style, and start in the **Character Studio**.
 
@@ -83,9 +84,8 @@ What is **not** in the repository: AI model weights, generated assets, user proj
 
 ## Status and honest limitations
 
-- **Automatic rigging** is a heuristic for upright T/A-pose humanoids. The rig report shows how well skinning worked. You can open the saved `.blend` file in Blender, fix the rig or weights, save, and re-render. Models that already contain a rig and named actions (e.g. *Walk*) are used as they are.
-- **Procedural animations** are simple, clean cycles. They are good for prototyping and small sprites, but they are not hand-keyed animation.
-- **Hunyuan3D-2mini** produces shape only. Colours are projected from the concept image, so back and side views reuse front colours. Read its license: it **excludes the EU, UK and South Korea**. Imported models work with the same pipeline.
+- **Characters** are generated frame by frame by an image model guided by the reference (IP-Adapter) and the skeleton (ControlNet). This keeps helmet, armour, colours and proportions far closer than text prompts, but it is not a trained per-character model: small details can still vary between frames. Fix single frames with *Regenerate Selected Frame* (new seed only) or by adjusting the pose; raise *Reference Strength* when the character drifts, lower it when poses are ignored. Back and side views are inferred from a front reference. A per-character LoRA (planned) is the next step for even tighter consistency.
+- **Hunyuan3D-2mini** (objects/buildings) produces shape only. Colours are projected from the concept image, so back and side views reuse front colours. Read its license: it **excludes the EU, UK and South Korea**. Imported models work with the same pipeline.
 - **VFX** are procedural, because current local image models cannot produce temporally coherent effect frames reliably.
 - ComfyUI workflows are validated against your ComfyUI installation (Diagnostics). Node names can change between ComfyUI versions. If that happens, the app tells you which node is missing.
 

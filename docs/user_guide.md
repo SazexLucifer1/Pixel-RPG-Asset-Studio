@@ -5,7 +5,7 @@
 | Tool | Why | Where |
 |---|---|---|
 | **ComfyUI** (Portable *or* Desktop) | runs the AI models on your GPU | Portable: <https://github.com/comfyanonymous/ComfyUI/releases> (download `ComfyUI_windows_portable_nvidia.7z` and extract it, e.g. to `D:\AI\`). Desktop: <https://www.comfy.org/download> |
-| **Blender** 3.6 LTS or newer | cleans up 3D models, rigs, animates and renders them | <https://www.blender.org/download/> |
+| **Blender** 3.6 LTS or newer | cleans up and renders 3D models of weapons, items, props and buildings | <https://www.blender.org/download/> |
 | **NVIDIA driver** | GPU access | <https://www.nvidia.com/Download/index.aspx> |
 
 You never have to open ComfyUI or Blender yourself. The studio starts and controls them.
@@ -52,18 +52,30 @@ On the **Style** page, set the things every asset must share:
 
 ## 5. Characters
 
-1. **New** → name the character, then describe it (description, equipment, weapon, colours).
-2. Optionally add **reference images**. With *Use first reference* checked, the first one guides the concept.
-3. Choose the target resolution, directions (1, side, 4 or 8) and animations, with frames, FPS and loop for each.
-4. Press **▶ Run Full Pipeline**, or run the steps one at a time:
-   - *Generate Concept* (or *Import Concept Image…*) produces the master reference
-   - *Generate 3D Model* (or *Import 3D Model…*: GLB, FBX, OBJ...)
-   - *Prepare Model* – cleanup, colours and automatic rig. Read the **rig report** under the buttons.
-   - *Render Animations* – renders, pixel-processes and builds the sprite sheet
-5. Review in the **Animation** tab (play/pause, FPS, step through frames, *Show raw render*). The text under the preview compares the selected frame with the master reference (palette match, proportions).
-6. **Regenerate Selected Frame** re-renders just that frame with identical settings. **Re-render This Animation** redoes one animation.
-7. If the model faces away from the camera, set *Model facing → Rotate 180°*, then run *Prepare Model* again.
-8. Rig not good enough? **Open .blend in Blender**, fix bones or weights (Weight Paint), save, then *Render Animations* again.
+There is exactly one character workflow:
+**Reference image → Character identity → Pose → AI generation → Pixel art → Animation frames → Sprite sheet → Godot**.
+
+**Needed once in ComfyUI** (see the *AI Models* page for links and licenses):
+- the custom node pack **ComfyUI_IPAdapter_plus** (ComfyUI → Manager → Custom Nodes Manager → search *IPAdapter plus* → Install → restart ComfyUI)
+- `models/ipadapter/ip-adapter-plus_sdxl_vit-h.safetensors`
+- `models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors`
+- `models/controlnet/xinsir-openpose-sdxl-1.0.safetensors`
+- plus the SDXL checkpoint and pixel-art LoRA you already use
+
+**Steps**
+1. **New** → name the character (e.g. *Knight*).
+2. **CHARACTER → Reference Image**: choose your character (full body, plain background is best). Optional: a short *Description* that supports the image, the *Sprite size* (16, 32, **48**, 64, 128) and an *Equipment* reference (close-up of weapon/shield).
+3. **Create Character** builds the identity: a cleaned copy of the reference (what the AI sees), a pixel preview and a palette locked from the reference (`identity/identity.json`).
+4. **IDENTITY**: *Reference Strength* = how strongly the reference controls the result (IP-Adapter weight). *Pose Strength* = how strictly the skeleton is followed (ControlNet strength). Good start: 0.8 / 0.85.
+5. **ANIMATION**: choose *Idle, Walk, Run, Attack, Hurt, Death* or *Custom…*, the *Direction* (Front, Back, Left, Right or all four) and the number of *Frames* (e.g. Idle 4, Walk 6, Attack 6).
+6. **POSE**: every frame gets a pose from the animation template. *Pose Editor* shows the OpenPose skeleton exactly as it is sent to the AI: drag head, neck, shoulders, elbows, hands, hips, knees and feet. *Preset Pose* applies Idle, Walk 1–4, Run 1–4, Attack 1–3, Hurt, Death (or your own saved presets) to the selected frame. *Mirror*, *Reset to Template* and *Save as Preset…* are below the editor. Use *Underlay* to see the generated frame or the reference behind the skeleton.
+7. **GENERATE → Generate Animation** generates the frames one after the other (one image at a time – fits 8 GB GPUs). All frames use the same seed so details stay stable.
+8. **FRAMES**: click a frame to inspect it and its pose. **Regenerate Selected Frame** redoes only that frame with the same identity, reference, pose, animation, direction, prompt and strengths – only the seed changes. Every frame's seed, prompts, strengths, model, workflow, resolution, palette, direction, animation and index are stored (*History / Metadata*).
+9. **EXPORT**: *Export PNG* (single frames), *Export Sprite Sheet* (`knight_walk.png` + `.json`, one row per direction) or *Export to Godot*.
+
+Files: `characters/knight_001/reference/`, `identity/`, `animations/<animation>/<direction>/{poses.json,pose,raw,final}/`, `generated/` (every AI output, never overwritten), `export/`.
+
+Tips: if the character drifts away from the reference, raise *Reference Strength* (0.9–1.1) or simplify the description; if the pose is ignored, raise *Pose Strength*; if the background is not removed cleanly, use a reference with a plain background.
 
 ## 6. Weapons, items, props, environment, buildings
 

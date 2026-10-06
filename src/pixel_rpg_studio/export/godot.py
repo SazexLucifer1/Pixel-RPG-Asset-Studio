@@ -8,6 +8,7 @@ Written files per asset (where applicable):
 
 * ``<id>.png`` / ``<id>_<view>.png``        - final sprites
 * ``<id>_sheet.png`` + ``<id>_sheet.json``  - sprite sheet + metadata
+* ``<name>_<animation>.png`` + ``.json``    - one sheet per character animation (rows = directions)
 * ``<id>_frames.tres``                      - Godot ``SpriteFrames`` resource
 * ``<id>_tileset.png`` + ``<id>_tileset.tres`` - Godot ``TileSet`` (with terrain)
 * ``<id>_<layer>.png``                      - background layers
@@ -33,6 +34,7 @@ ROLE_SHEET_META = "sprite_sheet_meta"
 ROLE_TILESET_ATLAS = "tileset_atlas"
 ROLE_TILESET_META = "tileset_meta"
 VIEW_PREFIX = "final_view:"
+ANIM_SHEET_PREFIX = "anim_sheet:"  # per-animation sheet (characters): <name>_<animation>.png
 LAYER_PREFIX = "layer:"
 
 HELPER_SCRIPT_NAME = "pixel_rpg_directional_sprite.gd"
@@ -235,6 +237,20 @@ def plan_asset_export(asset: Asset, export_root: Path, subdir: str = "assets/gen
             add_copy(role, f"{base}_{safe_filename(role[len(VIEW_PREFIX):])}.png")
         elif role.startswith(LAYER_PREFIX):
             add_copy(role, f"{base}_{safe_filename(role[len(LAYER_PREFIX):])}.png")
+
+    anim_base = safe_filename(asset.name, fallback=asset.id).lower()
+    for role in sorted(outputs):
+        if role.startswith(ANIM_SHEET_PREFIX):
+            src = asset.output_path(role)
+            if src is None:
+                continue
+            name = f"{anim_base}_{safe_filename(role[len(ANIM_SHEET_PREFIX):])}"
+            plan.files.append(ExportFile(f"{rel_dir}/{name}.png", source=src, kind="image"))
+            js = src.with_suffix(".json")
+            if js.exists():
+                meta = SheetMetadata.from_dict(read_json(js))
+                meta.image = f"{name}.png"
+                plan.files.append(ExportFile(f"{rel_dir}/{name}.json", content=json.dumps(meta.to_dict(), indent=2) + "\n", kind="data"))
 
     sheet_src = asset.output_path("sprite_sheet")
     meta_src = asset.output_path(ROLE_SHEET_META)

@@ -1,0 +1,191 @@
+{
+  "name": "character_frame",
+  "title": "Character frame: reference identity (IP-Adapter) + pose (OpenPose ControlNet)",
+  "kind": "image",
+  "description": "Generates ONE animation frame. The character reference image is the identity (IP-Adapter Plus, real image conditioning via CLIP Vision); the OpenPose skeleton image fixes the pose (ControlNet). SDXL + pixel-art LoRA; the app then pixel-processes the result.",
+  "requirements": [
+    "Custom node pack ComfyUI_IPAdapter_plus (cubiq) - install it with ComfyUI-Manager (nodes IPAdapterModelLoader, IPAdapterAdvanced)",
+    "An SDXL checkpoint (role image.checkpoint)",
+    "A pixel-art SDXL LoRA (role image.pixel_lora)",
+    "IP-Adapter Plus SDXL ViT-H model in models/ipadapter (role image.ipadapter)",
+    "CLIP Vision ViT-H image encoder in models/clip_vision (role image.clip_vision)",
+    "OpenPose ControlNet for SDXL in models/controlnet (role image.controlnet_openpose)"
+  ],
+  "parameters": {
+    "prompt": {
+      "node": "6",
+      "input": "text",
+      "type": "string"
+    },
+    "negative_prompt": {
+      "node": "7",
+      "input": "text",
+      "type": "string"
+    },
+    "seed": {
+      "node": "3",
+      "input": "seed",
+      "type": "int",
+      "min": 0,
+      "max": 4294967295
+    },
+    "steps": {
+      "node": "3",
+      "input": "steps",
+      "type": "int",
+      "default": 30,
+      "min": 1,
+      "max": 150
+    },
+    "cfg": {
+      "node": "3",
+      "input": "cfg",
+      "type": "float",
+      "default": 5.5,
+      "min": 1,
+      "max": 30
+    },
+    "sampler": {
+      "node": "3",
+      "input": "sampler_name",
+      "type": "string"
+    },
+    "scheduler": {
+      "node": "3",
+      "input": "scheduler",
+      "type": "string"
+    },
+    "width": {
+      "node": "5",
+      "input": "width",
+      "type": "int",
+      "default": 1024,
+      "min": 512,
+      "max": 2048
+    },
+    "height": {
+      "node": "5",
+      "input": "height",
+      "type": "int",
+      "default": 1024,
+      "min": 512,
+      "max": 2048
+    },
+    "lora_strength": {
+      "node": "10",
+      "input": [
+        "strength_model",
+        "strength_clip"
+      ],
+      "type": "float",
+      "default": 0.8,
+      "min": 0,
+      "max": 2
+    },
+    "reference_image": {
+      "node": "22",
+      "input": "image",
+      "type": "image",
+      "description": "Cleaned character reference (identity)"
+    },
+    "reference_strength": {
+      "node": "25",
+      "input": "weight",
+      "type": "float",
+      "default": 0.8,
+      "min": 0,
+      "max": 2,
+      "description": "UI: Reference Strength"
+    },
+    "reference_weight_type": {
+      "node": "25",
+      "input": "weight_type",
+      "type": "string",
+      "default": "linear"
+    },
+    "reference_end": {
+      "node": "25",
+      "input": "end_at",
+      "type": "float",
+      "default": 1.0,
+      "min": 0,
+      "max": 1
+    },
+    "equipment_image": {
+      "node": "23",
+      "input": "image",
+      "type": "image",
+      "description": "Optional weapon/shield reference (the identity reference when none is set)"
+    },
+    "equipment_strength": {
+      "node": "26",
+      "input": "weight",
+      "type": "float",
+      "default": 0.0,
+      "min": 0,
+      "max": 2
+    },
+    "pose_image": {
+      "node": "31",
+      "input": "image",
+      "type": "image",
+      "description": "OpenPose skeleton drawn by the app"
+    },
+    "pose_strength": {
+      "node": "32",
+      "input": "strength",
+      "type": "float",
+      "default": 0.85,
+      "min": 0,
+      "max": 2,
+      "description": "UI: Pose Strength"
+    },
+    "pose_end": {
+      "node": "32",
+      "input": "end_percent",
+      "type": "float",
+      "default": 1.0,
+      "min": 0,
+      "max": 1
+    },
+    "filename_prefix": {
+      "node": "9",
+      "input": "filename_prefix",
+      "type": "string"
+    }
+  },
+  "models": {
+    "image.checkpoint": {
+      "node": "4",
+      "input": "ckpt_name"
+    },
+    "image.pixel_lora": {
+      "node": "10",
+      "input": "lora_name"
+    },
+    "image.ipadapter": {
+      "node": "20",
+      "input": "ipadapter_file"
+    },
+    "image.clip_vision": {
+      "node": "21",
+      "input": "clip_name"
+    },
+    "image.controlnet_openpose": {
+      "node": "30",
+      "input": "control_net_name"
+    }
+  },
+  "outputs": {
+    "images": {
+      "node": "9"
+    }
+  },
+  "profiles": {
+    "low": {
+      "width": 768,
+      "height": 768,
+      "steps": 24
+    }
+  }
+}

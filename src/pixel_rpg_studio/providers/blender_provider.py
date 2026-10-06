@@ -1,4 +1,4 @@
-"""Blender-backed renderer and procedural animation provider."""
+"""Blender-backed renderer (3D objects: cleanup, colour projection, view rendering)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,7 @@ from pathlib import Path
 
 from pixel_rpg_studio.blender.runner import BlenderRunner
 from pixel_rpg_studio.core.errors import StudioError
-from pixel_rpg_studio.project.asset_types import ANIMATIONS
 from pixel_rpg_studio.providers.base import (
-    AnimationProvider,
     CancelledFn,
     PrepareRequest,
     PrepareResult,
@@ -50,7 +48,6 @@ class BlenderRenderer(RendererProvider):
                         "flat_color": list(request.flat_color)},
             "shading": {"style": request.shading_style, "bands": request.shading_bands},
             "light": {"direction": list(request.light)},
-            "rig": {"mode": request.rig_mode},
         }
         progress(None, "Blender: importing, cleaning and preparing the model")
         report = self.runner.run_job(job, work_dir=request.blend_path.parent / "jobs", progress=progress, cancelled=cancelled)
@@ -70,7 +67,6 @@ class BlenderRenderer(RendererProvider):
             "light": {"direction": list(request.light)},
             "directions": [{"key": k, "yaw_deg": y} for k, y in request.directions],
             "animations": [{"name": a.name, "frames": a.frames, "loop": a.loop} for a in request.animations],
-            "framing_animations": request.framing_animations,
         }
         if request.only_frames:
             job["only_frames"] = [{"animation": a, "direction": d, "frame": f} for a, d, f in request.only_frames]
@@ -84,23 +80,3 @@ class BlenderRenderer(RendererProvider):
             frames.setdefault((f["animation"], f["direction"]), {})[int(f["frame"])] = Path(f["path"])
         return RenderResult(frames, float(report["ortho_scale"]), list(report["target"]), self.id, report)
 
-
-class ProceduralAnimationProvider(AnimationProvider):
-    """Automatic humanoid rig + procedural animation inside Blender.
-
-    Limitations (shown in the UI): heuristic rig for upright T/A-pose
-    humanoids; animations are simple procedural cycles. Imported rigged models
-    with actions named like the animation (e.g. "Walk") use those actions.
-    """
-
-    id = "blender_procedural"
-    label = "Automatic rig + procedural animation (Blender)"
-
-    def status(self) -> ProviderStatus:
-        return ProviderStatus(True, "Procedural humanoid animation (requires Blender)")
-
-    def supported_animations(self) -> list[str]:
-        return list(ANIMATIONS)
-
-    def rig_mode(self) -> str:
-        return "auto_humanoid"

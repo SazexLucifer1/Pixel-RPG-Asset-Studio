@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased – characters rebuilt as a 2D reference pipeline
+
+- **Breaking:** the 3D character pipeline (concept → Hunyuan3D → colour projection → auto rig → procedural animation → render) and its UI, settings and workflows (`character_concept*`) were removed. Blender/Hunyuan stay for weapons, items, props, environment and buildings. Old character assets are not converted.
+- New Character Studio: Reference Image → Create Character (identity, palette locked from the reference) → animation (Idle, Walk, Run, Attack, Hurt, Death, Custom; adjustable frames) × Front/Back/Left/Right → Generate Animation → frames → Export PNG / Sprite Sheet / Godot
+- New `character_frame` workflow: SDXL + pixel LoRA + IP-Adapter Plus (reference image conditioning, "Reference Strength") + OpenPose ControlNet ("Pose Strength"); one frame per request, 768 px canvas on 8 GB GPUs
+- Pose system: skeleton with forward kinematics and per-direction projection (8 directions ready), presets (Idle, Walk 1–4, Run 1–4, Attack 1–3, Hurt, Death…), pose editor with draggable joints, user presets
+- Regenerate Selected Frame changes only the seed; every frame records seed, prompts, strengths, model, workflow, resolution, palette, direction, animation and frame index
+- Sprite sheets per animation (`knight_walk.png` + `.json`) exported to Godot together with the SpriteFrames resource
+- AI Models / Diagnostics list IP-Adapter, CLIP Vision ViT-H, xinsir OpenPose ControlNet and explain how to install ComfyUI_IPAdapter_plus
+
 ## 0.1.0 – first development release
 
 - Application shell (PySide6) with Dashboard, Projects, all asset studios, Style, AI Models, Settings and Diagnostics

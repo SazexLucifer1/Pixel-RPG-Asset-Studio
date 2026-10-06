@@ -8,14 +8,15 @@ Pixel RPG Asset Studio is a single Python process: a PySide6 desktop UI plus a b
 │     │ signals (queued to the GUI thread)                                        │
 │  ui/services.py ── core/jobs.py (single worker thread, sequential stages)       │
 │     │                                                                           │
-│  pipeline/  common · three_d · character · objects · backgrounds · tiles · vfx  │
+│  pipeline/  common · character · three_d · objects · backgrounds · tiles · vfx  │
 │     │            uses only interfaces ↓                                         │
 │  providers/ base.py (ImageGeneration / ThreeDGeneration / Renderer /            │
-│             Animation / ImageProcessing)  ← registry.py picks implementations   │
+│             ImageProcessing)  ← registry.py picks implementations               │
 │     ├─ comfyui_providers ── comfyui/ client · workflows · launcher · ws         │──HTTP/WS──► ComfyUI (local)
 │     ├─ blender_provider ─── blender/ runner · detect · scripts/studio_blender.py│──subprocess──► Blender (headless)
 │     └─ mock (tests / demo mode)                                                 │
-│  imaging/  pixel · tiles · vfx · compare      (deterministic, numpy + Pillow)   │
+│  poses/    skeleton · presets  (OpenPose poses for characters)                  │
+│  imaging/  pixel · tiles · vfx · compare · openpose (deterministic)             │
 │  spritesheet/builder · export/godot                                             │
 │  project/  project · asset · style · asset_types   (JSON on disk)               │
 │  core/     config · paths · errors · logging · jobs                             │
@@ -41,23 +42,20 @@ Pixel RPG Asset Studio is a single Python process: a PySide6 desktop UI plus a b
 
 ## Key flows
 
-### Character vertical slice (`pipeline/character.py`)
+### Character pipeline (`pipeline/character.py`, `poses/`)
 
-1. **Concept**: `generate_concept` builds the prompt from the style, asset type and description, calls `ImageGenerationProvider`, and stores the image plus a `GenerationRecord` (seed, model, workflow, prompts, params, reference hashes).
-2. **Master reference**: the concept goes through the deterministic pixel pipeline into `master_reference.png`.
-3. **3D model**: `threed_input_image` places the subject on a white square, then `ThreeDGenerationProvider` (Hunyuan3D via ComfyUI) returns a GLB. An imported model also works.
-4. **Prepare** (Blender `prepare` mode):
-   - join meshes, merge by distance, remove floating islands, recalculate normals, decimate
-   - normalise scale and ground the feet
-   - planar front projection of the concept colours
-   - engine-independent toon material
-   - automatic humanoid rig with heat weights (falls back to envelope weights)
-   - save an editable `.blend` and a clean GLB
-5. **Render** (Blender `render` mode): fixed orthographic camera at the style's elevation; light fixed in camera space. On the first render, the framing (ortho scale and target) is computed over all animations and directions, then stored and reused. That keeps feet on the same pixel row in every animation and every regenerated frame.
-6. **Pixel processing**: mode-downscale of the whole frame (no per-frame re-centering, so frames stay aligned), locked palette, orphan cleanup, outline.
-7. **Sprite sheet + metadata**, then **Godot export**.
+1. **Reference** (`set_reference`): stored as `reference/reference.png` with its hash.
+2. **Identity** (`create_identity`): background removed, cropped and centred on a white 1024² square (`reference_clean.png`, the IP-Adapter input); pixel preview; palette extracted from the reference and locked; everything in `identity/identity.json` (sprite size, strengths, seed, AI canvas size from the VRAM profile – 768 px on ≤ 8 GB).
+3. **Poses** (`poses/skeleton.py`, `poses/presets.py`): a small humanoid skeleton described by joint angles (`PoseParams`), forward kinematics, orthographic projection for any yaw (front/back/left/right now, diagonals ready) with OpenPose face-point visibility. Animation templates sample key presets (Idle, Walk 1–4, Attack 1–3, Hurt, Death…) for any frame count. Poses are materialised per frame in `animations/<anim>/<dir>/poses.json` and can be edited (pose editor) or replaced by presets; `imaging/openpose.py` draws the COCO-18 control image.
+4. **Frame** (`generate_frame`): one `ImageRequest` with the `character_frame` workflow – SDXL + pixel LoRA, `IPAdapterAdvanced` (weight = Reference Strength, CLIP Vision ViT-H) and `ControlNetApplyAdvanced` with the OpenPose image (strength = Pose Strength). Output kept in `generated/`, copied to `raw/`, and a `GenerationRecord` per frame.
+5. **Pixel processing** (`frame_steps`): background flood-fill on the full canvas, binary alpha, mode-downscale of the whole canvas (no per-frame cropping, so all frames share scale and ground line), quantise to the identity palette, orphan cleanup, outline.
+6. **Sheets + Godot**: `export/<name>_<animation>.png/.json` (one row per direction) and a combined sheet for the `SpriteFrames` resource.
 
-Each stage can be re-run on its own. `regenerate_frame` re-renders exactly one frame from the same scene and framing.
+`regenerate_frame` repeats the last generation of that frame with its recorded prompt and strengths and only a new seed.
+
+### 3D objects (`pipeline/three_d.py`)
+
+Weapons, items, props, environment and buildings: concept → Hunyuan3D (or imported model) → Blender `prepare` (cleanup, scale, front colour projection, toon material, `.blend` + GLB) → Blender `render` (fixed orthographic camera; framing computed once over all directions and stored) → pixel processing per view.
 
 ### Workflow abstraction
 

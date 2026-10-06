@@ -299,6 +299,8 @@ class ComfyUIClient:
             "loras": ("LoraLoader", "lora_name"),
             "vae": ("VAELoader", "vae_name"),
             "clip_vision": ("CLIPVisionLoader", "clip_name"),
+            "controlnet": ("ControlNetLoader", "control_net_name"),
+            "ipadapter": ("IPAdapterModelLoader", "ipadapter_file"),
             "upscale_models": ("UpscaleModelLoader", "model_name"),
         }
         if folder in loader_inputs:
@@ -314,13 +316,14 @@ class ComfyUIClient:
         return []
 
     # --------------------------------------------------------------- actions
-    def upload_image(self, path: Path, subfolder: str = "pixel_rpg_studio", overwrite: bool = True) -> str:
+    def upload_image(self, path: Path, subfolder: str = "pixel_rpg_studio", overwrite: bool = True,
+                     upload_name: str | None = None) -> str:
         """Upload an image to ComfyUI's input folder; returns the name to use in LoadImage."""
         path = Path(path)
         with open(path, "rb") as fh:
             response = self._request(
                 "POST", "/upload/image",
-                files={"image": (path.name, fh, "image/png")},
+                files={"image": (upload_name or path.name, fh, "image/png")},
                 data={"subfolder": subfolder, "type": "input", "overwrite": "true" if overwrite else "false"},
             )
         if response.status_code >= 400:

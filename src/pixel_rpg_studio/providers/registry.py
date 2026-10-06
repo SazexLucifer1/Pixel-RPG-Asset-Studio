@@ -14,13 +14,12 @@ from pixel_rpg_studio.comfyui.client import ComfyUIClient
 from pixel_rpg_studio.comfyui.workflows import WorkflowLibrary
 from pixel_rpg_studio.core.config import AppSettings
 from pixel_rpg_studio.providers.base import (
-    AnimationProvider,
     ImageGenerationProvider,
     ImageProcessingProvider,
     RendererProvider,
     ThreeDGenerationProvider,
 )
-from pixel_rpg_studio.providers.blender_provider import BlenderRenderer, ProceduralAnimationProvider
+from pixel_rpg_studio.providers.blender_provider import BlenderRenderer
 from pixel_rpg_studio.providers.comfyui_providers import ComfyUIHunyuan3DProvider, ComfyUIImageProvider
 from pixel_rpg_studio.providers.mock import BuiltinImageProcessor, MockImageProvider, MockRenderer, MockThreeDProvider
 from pixel_rpg_studio.system.gpu import resolve_profile
@@ -31,13 +30,12 @@ class ProviderSet:
     image: ImageGenerationProvider
     threed: ThreeDGenerationProvider
     renderer: RendererProvider
-    animation: AnimationProvider
     processing: ImageProcessingProvider
     profile: str = "medium"
     mock: bool = False
 
     def all(self) -> dict[str, object]:
-        return {"image": self.image, "threed": self.threed, "renderer": self.renderer, "animation": self.animation, "processing": self.processing}
+        return {"image": self.image, "threed": self.threed, "renderer": self.renderer, "processing": self.processing}
 
 
 Factory = Callable[[AppSettings, "BuildContext"], object]
@@ -90,8 +88,7 @@ def build_providers(settings: AppSettings, library: WorkflowLibrary | None = Non
     profile = resolve_profile(settings.gpu.vram_profile, gpus).key
     ctx = BuildContext(client or make_client(settings), library or WorkflowLibrary(), profile)
     if settings.use_mock_providers:
-        return ProviderSet(MockImageProvider(), MockThreeDProvider(), MockRenderer(), ProceduralAnimationProvider(),
-                           BuiltinImageProcessor(), profile, mock=True)
+        return ProviderSet(MockImageProvider(), MockThreeDProvider(), MockRenderer(), BuiltinImageProcessor(), profile, mock=True)
 
     def pick(table: dict, key: str, default: str):
         _, factory = table.get(key) or table[default]
@@ -101,7 +98,6 @@ def build_providers(settings: AppSettings, library: WorkflowLibrary | None = Non
         image=pick(IMAGE_PROVIDERS, settings.providers.image, "comfyui"),
         threed=pick(THREED_PROVIDERS, settings.providers.threed, "comfyui_hunyuan3d"),
         renderer=pick(RENDERER_PROVIDERS, settings.providers.renderer, "blender"),
-        animation=ProceduralAnimationProvider(),
         processing=BuiltinImageProcessor(),
         profile=profile,
     )

@@ -1,9 +1,9 @@
 """Procedural blockout meshes (OBJ).
 
 Used by the mock/test 3D provider and as an honest placeholder when no 3D AI
-model is installed: a simple box-built humanoid (T-pose) or object shape that
-still goes through the full Blender pipeline (colour projection, rigging,
-animation, rendering) so the workflow can be tested end-to-end.
+model is installed: a simple box-built object shape that still goes through
+the full Blender pipeline (cleanup, colour projection, rendering) so the
+workflow can be tested end-to-end.
 """
 
 from __future__ import annotations
@@ -25,19 +25,6 @@ def _box_faces(offset: int) -> list[tuple[int, int, int, int]]:
 def _box_vertices(b: Box) -> list[tuple[float, float, float]]:
     (x0, y0, z0), (x1, y1, z1) = b
     return [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
-
-
-def humanoid_boxes(height: float = 2.0) -> list[Box]:
-    h = height
-    return [
-        ((-0.16 * h, -0.08 * h, 0.48 * h), (0.16 * h, 0.08 * h, 0.8 * h)),  # torso
-        ((-0.1 * h, -0.09 * h, 0.82 * h), (0.1 * h, 0.09 * h, 1.0 * h)),  # head
-        ((-0.05 * h, -0.05 * h, 0.79 * h), (0.05 * h, 0.05 * h, 0.83 * h)),  # neck
-        ((0.16 * h, -0.045 * h, 0.72 * h), (0.5 * h, 0.045 * h, 0.79 * h)),  # left arm (+X)
-        ((-0.5 * h, -0.045 * h, 0.72 * h), (-0.16 * h, 0.045 * h, 0.79 * h)),  # right arm
-        ((0.02 * h, -0.06 * h, 0.0), (0.14 * h, 0.06 * h, 0.49 * h)),  # left leg
-        ((-0.14 * h, -0.06 * h, 0.0), (-0.02 * h, 0.06 * h, 0.49 * h)),  # right leg
-    ]
 
 
 def object_boxes(kind: str = "generic", height: float = 2.0) -> list[Box]:

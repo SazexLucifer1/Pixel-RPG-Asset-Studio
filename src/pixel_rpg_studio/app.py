@@ -63,22 +63,33 @@ def run_diagnose(settings, out: Path | None) -> int:
 
 
 def run_self_test(work_dir: Path | None = None) -> int:
-    """Headless end-to-end check: project → character → 3D → render → pixel → sheet → Godot export."""
+    """Headless end-to-end check: project → character reference → identity → poses →
+    frames (mock AI) → pixel processing → sprite sheets → Godot export."""
     from pixel_rpg_studio.core.config import AppSettings
     from pixel_rpg_studio.core.jobs import JobQueue, JobState
     from pixel_rpg_studio.export.godot import plan_asset_export
-    from pixel_rpg_studio.pipeline.character import CharacterRunOptions, run_character
+    from pixel_rpg_studio.pipeline import character
     from pixel_rpg_studio.pipeline.common import PipelineContext
     from pixel_rpg_studio.project.project import Project
+    from pixel_rpg_studio.providers.mock import mock_reference
     from pixel_rpg_studio.providers.registry import build_providers
 
     work = Path(work_dir or tempfile.mkdtemp(prefix="pixel_rpg_selftest_"))
     settings = AppSettings(use_mock_providers=True)
     project = Project.create(work, "Self Test")
     ctx = PipelineContext(project, build_providers(settings, gpus=[]))
-    asset = project.create_asset("character", "Test Hero", "test hero with blue tunic")
+    asset = project.create_asset("character", "Test Hero")
+    ref = work / "reference.png"
+    mock_reference(512).save(ref)
+
+    def run(c):
+        character.set_reference(asset, ref)
+        character.create_identity(ctx, asset, c, description="test hero with blue tunic", seed=1)
+        for anim in ("idle", "walk"):
+            character.generate_animation(ctx, asset, c, anim, ["s", "e"])
+
     queue = JobQueue()
-    job = queue.submit("self-test", lambda c: run_character(ctx, asset, c, CharacterRunOptions(seed=1, animations=["idle", "walk"])))
+    job = queue.submit("self-test", run)
     job.wait(600)
     queue.shutdown()
     if job.state != JobState.DONE:

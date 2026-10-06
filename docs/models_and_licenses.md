@@ -10,7 +10,12 @@ The application **does not contain and does not download** any AI model. You dow
 |---|---|---|---|---|
 | `image.checkpoint` | Stable Diffusion XL base 1.0 | `models/checkpoints` | CreativeML Open RAIL++-M: use restrictions in the license; commercial use of outputs permitted under its terms | <https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0> |
 | `image.pixel_lora` | Pixel Art XL (LoRA) | `models/loras` | See model card (CreativeML Open RAIL family) | <https://huggingface.co/nerijs/pixel-art-xl> |
+| `image.ipadapter` | IP-Adapter Plus SDXL ViT-H (`sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors`) – character identity from the reference image | `models/ipadapter` | Apache-2.0 | <https://huggingface.co/h94/IP-Adapter> |
+| `image.clip_vision` | CLIP ViT-H image encoder (`models/image_encoder/model.safetensors`, save as `CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors`) | `models/clip_vision` | Apache-2.0 (h94 repo); original LAION weights MIT | <https://huggingface.co/h94/IP-Adapter> |
+| `image.controlnet_openpose` | ControlNet OpenPose SDXL by xinsir (`diffusion_pytorch_model.safetensors`, save as `xinsir-openpose-sdxl-1.0.safetensors`) – character poses | `models/controlnet` | Apache-2.0 | <https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0> |
 | `threed.shape_model` | Hunyuan3D-2mini (shape) | `models/checkpoints` (save as `hunyuan3d-dit-v2-mini.safetensors`) | **Tencent Hunyuan 3D 2.0 Community License**: does **not** apply in the **EU, UK and South Korea**; additional conditions (e.g. for large services) | <https://huggingface.co/tencent/Hunyuan3D-2mini> |
+
+VRAM: SDXL + IP-Adapter + CLIP Vision + ControlNet fit an 8 GB GPU (e.g. RTX 3070) with the *low* profile: 768 px canvas, one frame per request, models unloaded between jobs; ComfyUI offloads what does not fit.
 
 All roles are configurable. Any SDXL checkpoint or pixel-art LoRA can be used instead (*AI Models → Choose Installed File…*). The 3D role can be replaced with another ComfyUI workflow, or bypassed entirely by importing 3D models.
 
@@ -25,6 +30,7 @@ All roles are configurable. Any SDXL checkpoint or pixel-art LoRA can be used in
 | Tool | License | Notes |
 |---|---|---|
 | ComfyUI | GPL-3.0 | Runs as a separate program; the app talks to it over its local HTTP API. Not bundled. |
+| ComfyUI_IPAdapter_plus (custom nodes, cubiq) | GPL-3.0 | Required for characters (`IPAdapterModelLoader`, `IPAdapterAdvanced`). Install in ComfyUI via Manager. Not bundled. <https://github.com/cubiq/ComfyUI_IPAdapter_plus> |
 | Blender | GPL-2.0-or-later | Runs as a separate program (headless). Not bundled. |
 | Godot | MIT | Export target only. |
 

@@ -14,7 +14,7 @@ into ``<project>/workflows/`` or ``%APPDATA%/PixelRPGAssetStudio/workflows/``.
 Manifest format::
 
     {
-      "name": "character_concept",
+      "name": "object_concept",
       "title": "Character concept (SDXL + pixel-art LoRA)",
       "kind": "image",                    # image | image_to_3d
       "description": "...",

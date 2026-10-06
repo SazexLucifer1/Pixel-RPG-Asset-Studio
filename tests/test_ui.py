@@ -43,16 +43,42 @@ def test_all_pages_load(window):
     assert window.pages["Dashboard"].project_label.text().startswith("<b>UI Test")
 
 
-def test_character_studio_full_run(window, qtbot):
+def test_character_studio_full_run(window, qtbot, tmp_path):
+    from pixel_rpg_studio.providers.mock import mock_reference
+
     page = window.pages["Characters"]
-    window.services.project.create_asset("character", "Knight", "knight")
+    ref = tmp_path / "knight.png"
+    mock_reference(256).save(ref)
+    asset = window.services.project.create_asset("character", "Knight")
     page.refresh_list()
     page.asset_list.setCurrentRow(0)
-    page.run_full()
+    from pixel_rpg_studio.pipeline import character as ch
+
+    ch.set_reference(asset, ref)
+    page.reload_asset()
+    page.description.setPlainText("knight with sword and shield")
+    page.create_character()
     wait_jobs(qtbot, window)
     assert window.errors == []
-    assert page.anim_combo.count() == 2 and len(page.preview.frames) > 0
-    page.preview.step(1)
+    assert page._identity() is not None
+    page.anim_combo.setCurrentIndex(page.anim_combo.findData("walk"))
+    page.dir_combo.setCurrentIndex(page.dir_combo.findData("e"))
+    page.frames_spin.setValue(4)
+    page.ref_strength.setValue(0.9)
+    page.generate_animation()
+    wait_jobs(qtbot, window)
+    assert window.errors == []
+    assert page.frame_list.count() == 4 and len(page.preview.frames) == 4
+    assert ch.load_identity(page.asset)["reference_strength"] == 0.9
+    # pose editing + preset + regenerate only that frame
+    page.frame_list.setCurrentRow(2)
+    assert page.pose_editor.pose is not None
+    page.pose_editor.move_joint("r_wrist", 0.8, 0.3)
+    assert ch.get_pose(page.asset, "walk", "e", 2).joints["r_wrist"] == [0.8, 0.3]
+    page.preset_combo.setCurrentText("Attack 2")
+    page.apply_preset()
+    assert ch.get_pose(page.asset, "walk", "e", 2).source == "preset:Attack 2"
+    page.frame_list.setCurrentRow(2)
     page.regenerate_frame()
     wait_jobs(qtbot, window)
     assert window.errors == []
@@ -63,10 +89,9 @@ def test_error_path_shows_dialog(window, qtbot):
     window.services.project.create_asset("character", "Empty")
     page.refresh_list()
     page.asset_list.setCurrentRow(0)
-    page.prepare_model()  # no model yet -> explained error, no crash
-    wait_jobs(qtbot, window)
+    page.generate_animation()  # no identity yet -> explained error, no crash
     assert len(window.errors) == 1
-    assert "3D model" in window.errors[0].message
+    assert "identity" in window.errors[0].message
 
 
 def test_style_page_saves(window):

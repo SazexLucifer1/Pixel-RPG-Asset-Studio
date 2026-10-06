@@ -8,7 +8,6 @@ from pixel_rpg_studio.core.jobs import JobState
 from pixel_rpg_studio.export.godot import plan_asset_export
 from pixel_rpg_studio.imaging.vfx import VFXParams
 from pixel_rpg_studio.pipeline import backgrounds, sheets, three_d, tiles, vfx
-from pixel_rpg_studio.pipeline.character import CharacterRunOptions, run_character
 from pixel_rpg_studio.pipeline.objects import ObjectRunOptions, run_object
 from pixel_rpg_studio.project.asset import Asset
 
@@ -16,66 +15,6 @@ from pixel_rpg_studio.project.asset import Asset
 def ok(job):
     assert job.state == JobState.DONE, job.error.full_text() if job.error else job.state
     return job.result
-
-
-def test_character_vertical_slice(mock_ctx, run_job, godot_project):
-    asset = mock_ctx.project.create_asset("character", "Soldier", "soldier with blue armor")
-    ok(run_job(lambda c: run_character(mock_ctx, asset, c, CharacterRunOptions(seed=7, model_seed=8, animations=["idle", "walk"]))))
-    asset = Asset.load(asset.root)
-    # reproducibility metadata
-    stages = [g.stage for g in asset.meta.generations]
-    for s in ("concept", "model_3d", "prepare", "render", "pixel_process"):
-        assert s in stages
-    concept = asset.last_generation("concept")
-    assert concept.seed == 7 and concept.prompt and concept.negative_prompt and concept.workflow == "character_concept"
-    assert concept.timestamp and concept.model
-    assert asset.last_generation("model_3d").seed == 8
-    # master reference + animations in 4 directions
-    assert asset.path("master_reference.png").exists()
-    walk = asset.meta.animations["walk"]
-    assert walk.directions == ["s", "w", "n", "e"]
-    assert len(walk.final_frames["s"]) == 6
-    for rel in walk.final_frames["w"]:
-        assert Image.open(asset.root / rel).size == (48, 48)
-    # framing stored for consistent re-renders, consistency info recorded
-    assert asset.meta.settings["camera_framing"]["ortho_scale"]
-    assert any(k.startswith("walk/s/") for k in asset.meta.settings["consistency"])
-    # sprite sheet + metadata
-    meta = json.loads(asset.output_path("sprite_sheet_meta").read_text())
-    assert {a["name"] for a in meta["animations"]} >= {"idle_s", "walk_e"}
-    # Godot export
-    written = plan_asset_export(asset, godot_project).execute()
-    assert any(p.name.endswith("_frames.tres") for p in written)
-
-
-def test_regenerate_single_frame_only(mock_ctx, run_job):
-    asset = mock_ctx.project.create_asset("character", "Mage")
-    ok(run_job(lambda c: run_character(mock_ctx, asset, c, CharacterRunOptions(seed=1, animations=["walk"]))))
-    asset = Asset.load(asset.root)
-    frames_dir = asset.path("animations", "walk", "s", "final")
-    before = {p.name: p.stat().st_mtime_ns for p in frames_dir.glob("*.png")}
-    ok(run_job(lambda c: three_d.regenerate_frame(mock_ctx, asset, c, "walk", "s", 3)))
-    after = {p.name: p.stat().st_mtime_ns for p in frames_dir.glob("*.png")}
-    changed = [n for n in before if after[n] != before[n]]
-    assert changed == ["frame_003.png"]
-    other_dir = asset.path("animations", "walk", "w", "final")
-    assert len(list(other_dir.glob("*.png"))) == 6  # untouched directions still complete
-    rec = asset.last_generation("render")
-    assert rec.target == "walk/s/3"
-    # framing reused, not recomputed
-    assert rec.params["camera"]["ortho_scale"] == asset.meta.settings["camera_framing"]["ortho_scale"]
-
-
-def test_import_paths(mock_ctx, run_job, tmp_path):
-    from pixel_rpg_studio.providers.blockout import humanoid_boxes, write_obj
-
-    img = tmp_path / "concept.png"
-    Image.new("RGB", (64, 64), "white").save(img)
-    model = write_obj(humanoid_boxes(), tmp_path / "hero.obj")
-    asset = mock_ctx.project.create_asset("character", "Imported")
-    ok(run_job(lambda c: run_character(mock_ctx, asset, c, CharacterRunOptions(concept_image=img, model_file=model, animations=["idle"]))))
-    asset = Asset.load(asset.root)
-    assert asset.last_generation("import") and asset.last_generation("model_import")
 
 
 def test_objects_and_buildings(mock_ctx, run_job, godot_project):
@@ -143,7 +82,7 @@ def test_vfx_and_sheets(mock_ctx, run_job, tmp_path):
 
 
 def test_failures_are_explained(mock_ctx, run_job):
-    asset = mock_ctx.project.create_asset("character", "Nobody")
+    asset = mock_ctx.project.create_asset("prop", "Nobody")
     job = run_job(lambda c: three_d.prepare_model(mock_ctx, asset, c))
     assert job.state == JobState.FAILED
     assert "3D model" in job.error.message and job.error.hint
