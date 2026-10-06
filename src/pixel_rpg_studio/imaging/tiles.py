@@ -17,6 +17,7 @@ from PIL import Image
 from pixel_rpg_studio.imaging.pixel import as_array, downscale, from_array, quantize_to_palette, to_rgba
 
 RGB = tuple[int, int, int]
+SEAM_THRESHOLD = 1.25  # seam may be 25% stronger than the strongest inner edge
 
 
 def make_seamless(img: Image.Image) -> Image.Image:
@@ -39,23 +40,28 @@ def make_seamless(img: Image.Image) -> Image.Image:
 
 
 def seam_score(img: Image.Image) -> dict[str, float]:
-    """How much stronger the wrap-around seams are than normal pixel changes.
+    """How visible the wrap-around seams are.
 
-    Returns ``horizontal`` (left/right edge), ``vertical`` (top/bottom edge)
-    and ``score`` (the worse of the two). ~1.0 means the seam is as smooth as
-    the texture itself; values above ~1.5 are usually visible.
+    * ``horizontal`` / ``vertical``: seam strength divided by the *strongest*
+      edge between neighbouring columns/rows inside the tile. <= 1.0 means the
+      seam is no stronger than detail already in the texture (invisible when
+      tiled); clearly above 1.0 means a visible line.
+    * ``score``: the worse of the two.
+    * ``mean_ratio``: seam strength relative to the average edge (informative).
     """
     arr = as_array(img).astype(np.float32)[..., :3]
-    interior_x = np.abs(np.diff(arr, axis=1)).mean() + 1e-3
-    interior_y = np.abs(np.diff(arr, axis=0)).mean() + 1e-3
-    seam_x = np.abs(arr[:, 0] - arr[:, -1]).mean()
-    seam_y = np.abs(arr[0, :] - arr[-1, :]).mean()
-    horizontal = float(seam_x / interior_x)
-    vertical = float(seam_y / interior_y)
-    return {"horizontal": horizontal, "vertical": vertical, "score": max(horizontal, vertical)}
+    col_edges = np.abs(np.diff(arr, axis=1)).mean(axis=(0, 2))  # per column pair
+    row_edges = np.abs(np.diff(arr, axis=0)).mean(axis=(1, 2))
+    seam_x = float(np.abs(arr[:, 0] - arr[:, -1]).mean())
+    seam_y = float(np.abs(arr[0, :] - arr[-1, :]).mean())
+    eps = 1e-3
+    horizontal = seam_x / (float(col_edges.max()) + eps) if len(col_edges) else 0.0
+    vertical = seam_y / (float(row_edges.max()) + eps) if len(row_edges) else 0.0
+    mean_ratio = max(seam_x / (float(col_edges.mean()) + eps), seam_y / (float(row_edges.mean()) + eps)) if len(col_edges) else 0.0
+    return {"horizontal": horizontal, "vertical": vertical, "score": max(horizontal, vertical), "mean_ratio": mean_ratio}
 
 
-def is_seamless(img: Image.Image, threshold: float = 1.5) -> bool:
+def is_seamless(img: Image.Image, threshold: float = SEAM_THRESHOLD) -> bool:
     return seam_score(img)["score"] <= threshold
 
 

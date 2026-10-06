@@ -65,9 +65,11 @@ class ProjectInfo:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ProjectInfo":
+        if not isinstance(data, dict):
+            raise ValueError("project.json must contain a JSON object")
         names = {f.name for f in fields(cls)}
         clean = {k: v for k, v in data.items() if k in names}
-        godot = data.get("godot") or {}
+        godot = data.get("godot") if isinstance(data.get("godot"), dict) else {}
         gnames = {f.name for f in fields(GodotSettings)}
         clean["godot"] = GodotSettings(**{k: v for k, v in godot.items() if k in gnames})
         if "name" not in clean or "id" not in clean:

@@ -90,6 +90,7 @@ class PrepareRequest:
     scale_mode: str = "height"
     decimate_faces: int = 12000
     texture_mode: str = "project"  # project | flat | keep
+    concept_image: Path | None = None  # original concept (with background), for providers that need it
     flat_color: tuple[float, float, float] = (0.7, 0.7, 0.7)
 
 

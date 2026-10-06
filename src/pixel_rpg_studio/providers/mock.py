@@ -104,7 +104,7 @@ def mock_background(width: int, height: int, seed: int, prompt: str) -> Image.Im
     sky_top, sky_bottom = np.array(_color(rng)), np.array((230, 220, 200))
     t = np.linspace(0, 1, height)[:, None, None]
     arr = (sky_top * (1 - t) + sky_bottom * t).repeat(width, axis=1).astype(np.uint8)
-    img = Image.fromarray(arr, "RGB")
+    img = Image.fromarray(arr, "RGB").copy()  # copy: drawing on a shared buffer is lost (Pillow 12)
     d = ImageDraw.Draw(img)
     for layer, (col, base_h) in enumerate(((_color(rng), 0.55), (_color(rng), 0.7), (_color(rng), 0.85))):
         phase = float(rng.random()) * 6
@@ -172,7 +172,8 @@ class MockRenderer(RendererProvider):
 
     def prepare(self, request: PrepareRequest, progress: ProgressFn = _noop_progress, cancelled: CancelledFn = _never) -> PrepareResult:
         request.blend_path.parent.mkdir(parents=True, exist_ok=True)
-        data = {"mock": True, "texture": str(request.texture_image) if request.texture_image else "", "model": str(request.model_path),
+        source = request.concept_image or request.texture_image
+        data = {"mock": True, "texture": str(source) if source else "", "model": str(request.model_path),
                 "rig_mode": request.rig_mode}
         request.blend_path.write_text(json.dumps(data), encoding="utf-8")
         report = {"ok": True, "warnings": ["Mock renderer: no real 3D processing was performed."],

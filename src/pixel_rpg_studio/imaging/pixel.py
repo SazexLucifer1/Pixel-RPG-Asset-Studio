@@ -34,7 +34,9 @@ def as_array(img: Image.Image) -> np.ndarray:
 
 
 def from_array(arr: np.ndarray) -> Image.Image:
-    return Image.fromarray(np.ascontiguousarray(arr, dtype=np.uint8), "RGBA")
+    # .copy(): with Pillow >= 12 fromarray() may share the numpy buffer, and
+    # in-place drawing (ImageDraw, floodfill) on such images is silently lost.
+    return Image.fromarray(np.ascontiguousarray(arr, dtype=np.uint8), "RGBA").copy()
 
 
 def has_transparency(img: Image.Image, min_fraction: float = 0.01) -> bool:
@@ -71,7 +73,7 @@ def remove_background(img: Image.Image, tolerance: int = 32, force: bool = False
     candidate = diff <= tolerance
     # Flood fill over the candidate mask from every border seed (PIL's C
     # implementation; fast even for 2048px images).
-    mask = Image.fromarray(np.where(candidate, 255, 0).astype(np.uint8), "L")
+    mask = Image.fromarray(np.where(candidate, 255, 0).astype(np.uint8), "L").copy()  # copy: see from_array
     seeds = [(x, y) for x in range(w) for y in (0, h - 1)] + [(x, y) for y in range(h) for x in (0, w - 1)]
     for seed in seeds:
         if mask.getpixel(seed) == 255:

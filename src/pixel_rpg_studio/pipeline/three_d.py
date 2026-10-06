@@ -159,7 +159,7 @@ def prepare_model(ctx: PipelineContext, asset: Asset, progress: Progress) -> dic
         model_path=raw, blend_path=blend, export_model_path=clean, texture_image=texture, rig_mode=s["rig_mode"],
         shading_style=style.shading_style, shading_bands=style.shading_bands, light=style.light(),
         facing_correction_deg=float(s.get("facing_correction_deg", 0.0)),
-        scale_mode="height" if asset.type == "character" else "max", texture_mode=s["texture_mode"],
+        scale_mode="height" if asset.type == "character" else "max", texture_mode=s["texture_mode"], concept_image=concept,
     )
     started = time.time()
     result = ctx.providers.renderer.prepare(req, progress=progress.progress, cancelled=lambda: progress.cancelled)
@@ -211,12 +211,14 @@ def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animat
         framing_anims = list((s.get("animations") or {}).keys())
     else:
         framing_anims = []
-    key = {"elevation": style.elevation(), "yaw": style.perspective_yaw(), "w": W, "h": H, "scale": scale, "anims": framing_anims}
+    elevation = float(s["elevation_deg"]) if s.get("elevation_deg") is not None else style.elevation()
+    yaw_offset = float(s["camera_yaw_deg"]) if s.get("camera_yaw_deg") is not None else style.perspective_yaw()
+    key = {"elevation": elevation, "yaw": yaw_offset, "w": W, "h": H, "scale": scale, "anims": framing_anims}
     reuse = framing.get("key") == key
     req = RenderRequest(
         blend_path=asset.root / blend_rel, output_dir=asset.path("render"), width=W * scale, height=H * scale,
-        directions=[(d, DIRECTIONS[d].yaw_deg) for d in dirs], animations=specs, elevation_deg=style.elevation(),
-        yaw_offset_deg=style.perspective_yaw(), light=style.light(),
+        directions=[(d, DIRECTIONS[d].yaw_deg) for d in dirs], animations=specs, elevation_deg=elevation,
+        yaw_offset_deg=yaw_offset, light=style.light(),
         ortho_scale=framing.get("ortho_scale") if reuse else None, target=framing.get("target") if reuse else None,
         framing_animations=framing_anims, only_frames=only_frames,
     )
@@ -226,7 +228,7 @@ def render_frames(ctx: PipelineContext, asset: Asset, progress: Progress, animat
     s["camera_framing"] = {"key": key, "ortho_scale": result.ortho_scale, "target": result.target}
     asset.add_generation(GenerationRecord(
         stage="render", provider=result.provider,
-        params={"camera": {"elevation": style.elevation(), "yaw_offset": style.perspective_yaw(), "ortho_scale": result.ortho_scale,
+        params={"camera": {"elevation": elevation, "yaw_offset": yaw_offset, "ortho_scale": result.ortho_scale,
                            "target": result.target}, "light": list(style.light()), "resolution": [req.width, req.height],
                 "animations": [a.__dict__ for a in specs], "directions": dirs},
         target=";".join(f"{a}/{d}/{f}" for a, d, f in only_frames) if only_frames else "",
